@@ -294,6 +294,37 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               resolve(wsocket);
 
+              // Pré-carregar mapeamentos LID→PN do Redis no cache em memória.
+              // O evento lid-mapping.update raramente dispara (Baileys issue #2263),
+              // então lemos os dados persitidos pelo Baileys na auth store diretamente.
+              // Formato no Redis: sessions:{id}:lid-mapping-{lidUser}_reverse → "{pnUser}"
+              setTimeout(async () => {
+                try {
+                  const reverseKeys = await cacheLayer.getKeys(`sessions:${whatsapp.id}:lid-mapping-*_reverse`);
+                  if (reverseKeys.length > 0) {
+                    logger.info(`[LID] Pré-carregando ${reverseKeys.length} mapeamentos LID do Redis para sessão ${whatsapp.id}`);
+                    await Promise.all(reverseKeys.map(async (redisKey) => {
+                      try {
+                        const raw = await cacheLayer.get(redisKey);
+                        if (!raw) return;
+                        const pnUser: string = JSON.parse(raw);
+                        if (!pnUser || typeof pnUser !== "string") return;
+                        // Extrai o lidUser do nome da chave
+                        const prefix = `sessions:${whatsapp.id}:lid-mapping-`;
+                        const lidUser = redisKey.slice(prefix.length).replace(/_reverse$/, "");
+                        if (!lidUser) return;
+                        await storeLidMapping(`${lidUser}@lid`, `${pnUser}@s.whatsapp.net`);
+                      } catch (e) {
+                        logger.warn(`[LID] Erro ao pré-carregar chave ${redisKey}: ${e}`);
+                      }
+                    }));
+                    logger.info(`[LID] Mapeamentos LID pré-carregados para sessão ${whatsapp.id}`);
+                  }
+                } catch (err) {
+                  logger.warn(`[LID] Falha ao pré-carregar mapeamentos LID: ${err}`);
+                }
+              }, 3000);
+
               // Carregar todos os grupos que esse número participa
               setTimeout(async () => {
                 try {
@@ -446,8 +477,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           }
         };
 
-        // Evento 1: lid-mapping.update — disparado pelo Baileys quando descobre um mapeamento novo
-        // Estrutura: { lid: "148262@lid", pn: "5511999@s.whatsapp.net" }
+        // Evento 1: lid-mapping.update — RARAMENTE dispara na prática (Baileys issue #2263).
+        // A resolução principal vem de: remoteJidAlt/participantAlt nas mensagens (wbotMessageListener)
+        // e do pré-carregamento Redis acima. Mantemos o listener como fallback residual.
         wsocket.ev.on("lid-mapping.update", async ({ lid, pn }: { lid: string; pn: string }) => {
           if (lid && pn && isLidUser(lid) && isPnUser(pn)) {
             logger.info(`[LID] lid-mapping.update: ${lid} → ${pn}`);

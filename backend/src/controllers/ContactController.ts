@@ -34,6 +34,8 @@ type IndexQuery = {
   pageNumber: string;
   contactTag: string;
   isGroup?: string;
+  channel?: string;
+  active?: string;
 };
 
 type IndexGetContactQuery = {
@@ -91,7 +93,7 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { searchParam, pageNumber, contactTag: tagIdsStringified, isGroup } = req.query as IndexQuery;
+  const { searchParam, pageNumber, contactTag: tagIdsStringified, isGroup, channel, active } = req.query as IndexQuery;
   const { companyId } = req.user;
 
   let tagsIds: number[] = [];
@@ -105,7 +107,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     pageNumber,
     companyId,
     tagsIds,
-    isGroup
+    isGroup,
+    channel,
+    active
   });
 
   return res.json({ contacts, count, hasMore });

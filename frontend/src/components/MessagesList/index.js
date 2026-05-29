@@ -54,6 +54,7 @@ import { Stack } from "@mui/material";
 
 
 import './styles.css';
+import formatMentions from "../../utils/formatMentions";
 
 
 const useStyles = makeStyles((theme) => ({
@@ -1140,7 +1141,7 @@ const MessagesList = ({
                       )}
 
                       {(message.mediaType === "image" && path.basename(message.mediaUrl) === message.body) || (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage") && (
-                        <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : message.body}</MarkdownWrapper>
+                        <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : formatMentions(message.body)}</MarkdownWrapper>
                       )}
 
                       {message.quotedMsg && message.mediaType === "reactionMessage" && (
@@ -1251,7 +1252,7 @@ const MessagesList = ({
                   )}
 
                   {(message.mediaType === "image" && path.basename(message.mediaUrl) === message.body) || (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage") && (
-                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                    <MarkdownWrapper>{formatMentions(message.body)}</MarkdownWrapper>
                   )}
 
                   {message.quotedMsg && message.mediaType === "reactionMessage" && (

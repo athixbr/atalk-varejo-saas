@@ -10,7 +10,10 @@ const upload = multer(uploadConfig);
 const routes = express.Router();
 
 routes.get("/announcements/list", isAuth, AnnouncementController.findList);
+routes.get("/announcements/admin/notifications", isAuth, AnnouncementController.adminNotifications);
 routes.get("/announcements", isAuth, AnnouncementController.index);
+routes.patch("/announcements/:id/dismiss", isAuth, AnnouncementController.dismiss);
+routes.patch("/announcements/:id/read", isAuth, AnnouncementController.markRead);
 routes.get("/announcements/:id", isAuth, AnnouncementController.show);
 routes.post("/announcements", isAuth, AnnouncementController.store);
 routes.put("/announcements/:id", isAuth,  upload.array("file"), AnnouncementController.update);

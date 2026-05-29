@@ -18,12 +18,14 @@ import TableRow from "@material-ui/core/TableRow";
 import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 import Avatar from "@material-ui/core/Avatar";
+import Chip from "@material-ui/core/Chip";
+import Tooltip from "@material-ui/core/Tooltip";
 import { Facebook, Instagram, WhatsApp } from "@material-ui/icons";
 import SearchIcon from "@material-ui/icons/Search";
 import GetAppIcon from "@material-ui/icons/GetApp";
 import PictureAsPdfIcon from "@material-ui/icons/PictureAsPdf";
+import PersonIcon from "@material-ui/icons/Person";
 import { CSVLink } from "react-csv";
-import CloudDownloadIcon from '@material-ui/icons/CloudDownload';
 
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
@@ -54,15 +56,12 @@ import { TagsFilter } from "../../components/TagsFilter";
 import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
 import formatSerializedId from '../../utils/formatSerializedId';
 
-import PhoneInput from 'react-phone-input-2';
-import 'react-phone-input-2/lib/style.css';
-
 import {
     ArrowDropDown,
     Backup,
     ContactPhone,
 } from "@material-ui/icons";
-import { Menu, MenuItem, Box, Tooltip } from "@material-ui/core";
+import { Menu, MenuItem, Box, Typography, Select, FormControl, InputLabel } from "@material-ui/core";
 
 import ContactImportWpModal from "../../components/ContactImportWpModal";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
@@ -98,7 +97,6 @@ const reducer = (state, action) => {
 
     if (action.type === "DELETE_CONTACT") {
         const contactId = action.payload;
-
         const contactIndex = state.findIndex((c) => c.id === contactId);
         if (contactIndex !== -1) {
             state.splice(contactIndex, 1);
@@ -117,6 +115,72 @@ const useStyles = makeStyles((theme) => ({
         padding: theme.spacing(1),
         overflowY: "scroll",
         ...theme.scrollbarStyles,
+    },
+    filterBar: {
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: theme.spacing(1),
+        padding: theme.spacing(1, 0),
+        marginBottom: theme.spacing(0.5),
+    },
+    searchField: {
+        minWidth: 220,
+        flex: 1,
+    },
+    filterSelect: {
+        minWidth: 120,
+    },
+    exportGroup: {
+        display: "flex",
+        gap: theme.spacing(0.5),
+        alignItems: "center",
+    },
+    tagChip: {
+        margin: "2px",
+        height: 20,
+        fontSize: "0.7rem",
+    },
+    ticketBadge: {
+        display: "flex",
+        gap: 4,
+        justifyContent: "center",
+        flexWrap: "wrap",
+    },
+    countLabel: {
+        fontSize: "0.8rem",
+        color: theme.palette.text.secondary,
+        marginLeft: theme.spacing(1),
+    },
+    lastAgent: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        justifyContent: "center",
+        fontSize: "0.8rem",
+    },
+    dateCell: {
+        fontSize: "0.78rem",
+        whiteSpace: "nowrap",
+    },
+    headerActions: {
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: theme.spacing(1),
+        width: "100%",
+    },
+    sectionDivider: {
+        width: "100%",
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        margin: theme.spacing(0.5, 0),
+    },
+    statusDot: {
+        width: 10,
+        height: 10,
+        borderRadius: "50%",
+        display: "inline-block",
+        marginRight: 4,
     },
 }));
 
@@ -140,36 +204,28 @@ const Contacts = () => {
     const [blockingContact, setBlockingContact] = useState(null);
     const [unBlockingContact, setUnBlockingContact] = useState(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [exportContact, setExportContact] = useState(false);
     const [confirmChatsOpen, setConfirmChatsOpen] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [newTicketModalOpen, setNewTicketModalOpen] = useState(false);
     const [contactTicket, setContactTicket] = useState({});
     const fileUploadRef = useRef(null);
     const [selectedTags, setSelectedTags] = useState([]);
-    
-    // Novos filtros
     const [filterChannel, setFilterChannel] = useState("");
     const [filterStatus, setFilterStatus] = useState("");
-
 
     const { get: getSetting } = useCompanySettings();
     const [hideNum, setHideNum] = useState(false);
 
     useEffect(() => {
-
         async function fetchData() {
-            const setting = await getSetting({
-                "column": "lgpdHideNumber"
-            });
-
+            const setting = await getSetting({ "column": "lgpdHideNumber" });
             if (setting.lgpdHideNumber === "enabled") {
                 setHideNum(true);
             }
         }
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, []);
 
     const handleImportExcel = async () => {
         try {
@@ -197,9 +253,9 @@ const Contacts = () => {
             const fetchContacts = async () => {
                 try {
                     const { data } = await api.get("/contacts/", {
-                        params: { 
-                            searchParam, 
-                            pageNumber, 
+                        params: {
+                            searchParam,
+                            pageNumber,
                             contactTag: JSON.stringify(selectedTags),
                             channel: filterChannel,
                             active: filterStatus
@@ -227,15 +283,12 @@ const Contacts = () => {
             if (data.action === "update" || data.action === "create") {
                 dispatch({ type: "UPDATE_CONTACTS", payload: data.contact });
             }
-
             if (data.action === "delete") {
                 dispatch({ type: "DELETE_CONTACT", payload: +data.contactId });
             }
         });
 
-        return () => {
-            socket.disconnect();
-        };
+        return () => { socket.disconnect(); };
     }, []);
 
     const handleCloseOrOpenTicket = (ticket) => {
@@ -251,7 +304,7 @@ const Contacts = () => {
     };
 
     const handleSearch = (event) => {
-        setSearchParam(event.target.value.toLowerCase());
+        setSearchParam(event.target.value);
     };
 
     const handleOpenContactModal = () => {
@@ -288,10 +341,9 @@ const Contacts = () => {
         } catch (err) {
             toastError(err);
         }
-        setDeletingContact(null);
+        setBlockingContact(null);
         setSearchParam("");
         setPageNumber(1);
-        setBlockingContact(null);
     };
 
     const handleUnBlockContact = async (contactId) => {
@@ -301,10 +353,9 @@ const Contacts = () => {
         } catch (err) {
             toastError(err);
         }
-        setDeletingContact(null);
+        setUnBlockingContact(null);
         setSearchParam("");
         setPageNumber(1);
-        setUnBlockingContact(null);
     };
 
     const handleimportContact = async () => {
@@ -327,92 +378,98 @@ const Contacts = () => {
         }
     };
 
+    // Retorna o último ticket (mais recente pelo updatedAt)
+    const getLastTicket = (contact) => {
+        if (!contact?.tickets?.length) return null;
+        return [...contact.tickets].sort(
+            (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+        )[0];
+    };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return "—";
+        const date = new Date(dateStr);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
+
+    const getTicketStats = (contact) => {
+        if (!contact?.tickets?.length) return { open: 0, pending: 0, closed: 0 };
+        return contact.tickets.reduce(
+            (acc, t) => {
+                if (t.status === "open") acc.open++;
+                else if (t.status === "pending") acc.pending++;
+                else if (t.status === "closed") acc.closed++;
+                return acc;
+            },
+            { open: 0, pending: 0, closed: 0 }
+        );
+    };
+
+    const formatNumber = (contact) => {
+        if (contact.isGroup) return contact.number;
+        const formatted = formatSerializedId(contact.number, contact.remoteJid);
+        if (hideNum && user.profile === "user") {
+            return formatted.slice(0, -6) + "**-**" + contact.number.slice(-2);
+        }
+        return formatted;
+    };
+
     const prepareExportData = () => {
-        return contacts.map((contact) => ({
-            Nome: contact.name,
-            Número: hideNum && user.profile === "user" 
-                ? contact.isGroup 
-                    ? contact.number 
-                    : formatSerializedId(contact.number).slice(0, -6) + "**-**" + contact.number.slice(-2)
-                : contact.isGroup 
-                    ? contact.number 
-                    : formatSerializedId(contact.number),
-            Email: contact.email || "",
-            Status: contact.active ? "Ativo" : "Bloqueado",
-            Tags: contact.tags?.map(t => t.name).join(", ") || "",
-            "Última Mensagem": getDateLastMessage(contact) || "Sem mensagens"
-        }));
+        return contacts.map((contact) => {
+            const lastTicket = getLastTicket(contact);
+            const stats = getTicketStats(contact);
+            return {
+                Nome: contact.name,
+                Número: formatNumber(contact),
+                Email: contact.email || "",
+                Canal: contact.channel || "whatsapp",
+                Status: contact.active ? "Ativo" : "Bloqueado",
+                Tags: contact.tags?.map(t => t.name).join(", ") || "",
+                "Último Atendente": lastTicket?.user?.name || "",
+                "Última Interação": lastTicket ? formatDate(lastTicket.updatedAt) : "",
+                "Tickets Abertos": stats.open,
+                "Tickets Pendentes": stats.pending,
+                "Tickets Fechados": stats.closed,
+            };
+        });
     };
 
     const handleExportPDF = () => {
         try {
             const exportData = prepareExportData();
-            
-            // Cria uma janela para impressão
             const printWindow = window.open('', '_blank');
-            
-            const htmlContent = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Contatos - ${new Date().toLocaleDateString()}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        h1 { color: #3f51b5; }
-                        .info { margin: 10px 0; color: #666; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
-                        th { background-color: #3f51b5; color: white; }
-                        tr:nth-child(even) { background-color: #f2f2f2; }
-                        @media print {
-                            body { margin: 0; }
-                            button { display: none; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <h1>Lista de Contatos</h1>
-                    <div class="info">
-                        <strong>Total:</strong> ${totalCount} contatos | 
-                        <strong>Exibindo:</strong> ${contacts.length} contatos |
-                        <strong>Data:</strong> ${new Date().toLocaleString()}
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nome</th>
-                                <th>Número</th>
-                                <th>Email</th>
-                                <th>Status</th>
-                                <th>Tags</th>
-                                <th>Última Mensagem</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${exportData.map(contact => `
-                                <tr>
-                                    <td>${contact.Nome}</td>
-                                    <td>${contact.Número}</td>
-                                    <td>${contact.Email}</td>
-                                    <td>${contact.Status}</td>
-                                    <td>${contact.Tags}</td>
-                                    <td>${contact["Última Mensagem"]}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                    <script>
-                        window.onload = function() {
-                            window.print();
-                        }
-                    </script>
-                </body>
-                </html>
-            `;
-            
+            const htmlContent = `<!DOCTYPE html>
+<html><head>
+<title>Contatos - ${new Date().toLocaleDateString()}</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:20px}
+  h1{color:#3f51b5}
+  .info{margin:10px 0;color:#666}
+  table{width:100%;border-collapse:collapse;margin-top:20px}
+  th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;font-size:11px}
+  th{background-color:#3f51b5;color:#fff}
+  tr:nth-child(even){background-color:#f5f5f5}
+  @media print{button{display:none}}
+</style></head>
+<body>
+<h1>Lista de Contatos</h1>
+<div class="info"><strong>Total:</strong> ${totalCount} | <strong>Exibindo:</strong> ${contacts.length} | <strong>Data:</strong> ${new Date().toLocaleString()}</div>
+<table><thead><tr>
+  <th>Nome</th><th>Número</th><th>Email</th><th>Canal</th><th>Status</th>
+  <th>Tags</th><th>Último Atendente</th><th>Última Interação</th>
+  <th>Abertos</th><th>Pendentes</th><th>Fechados</th>
+</tr></thead><tbody>
+${exportData.map(c => `<tr>
+  <td>${c.Nome}</td><td>${c.Número}</td><td>${c.Email}</td><td>${c.Canal}</td><td>${c.Status}</td>
+  <td>${c.Tags}</td><td>${c["Último Atendente"]}</td><td>${c["Última Interação"]}</td>
+  <td>${c["Tickets Abertos"]}</td><td>${c["Tickets Pendentes"]}</td><td>${c["Tickets Fechados"]}</td>
+</tr>`).join('')}
+</tbody></table>
+<script>window.onload=function(){window.print()}</script>
+</body></html>`;
             printWindow.document.write(htmlContent);
             printWindow.document.close();
-            
             toast.success("PDF preparado para impressão!");
         } catch (err) {
             toastError(err);
@@ -431,51 +488,35 @@ const Contacts = () => {
         }
     };
 
-    function getDateLastMessage(contact) {
-        if (!contact) return null;
-        if (!contact.tickets) return null;
+    const getChannelIcon = (channel) => {
+        if (channel === "instagram") return <Instagram style={{ color: "#C13584", fontSize: 18 }} />;
+        if (channel === "facebook") return <Facebook style={{ color: "#1877F2", fontSize: 18 }} />;
+        return <WhatsApp style={{ color: "#25D366", fontSize: 18 }} />;
+    };
 
-        if (contact.tickets.length > 0) {
-            const date = new Date(
-                contact.tickets[contact.tickets.length - 1].updatedAt
-            );
-
-            const day =
-                date.getDate() > 9 ? date.getDate() : `0${date.getDate()}`;
-            const month = date.getMonth() + 1;
-            const year = date.getFullYear();
-
-            const hours = date.getHours();
-            const minutes = date.getMinutes();
-
-            return `${day}/${month}/${year} ${hours}:${minutes}`;
-        }
-
-        return null;
-    }
+    const getChannelLabel = (channel) => {
+        if (channel === "instagram") return "Instagram";
+        if (channel === "facebook") return "Facebook";
+        return "WhatsApp";
+    };
 
     return (
-
         <MainContainer className={classes.mainContainer}>
             <NewTicketModal
                 modalOpen={newTicketModalOpen}
                 initialContact={contactTicket}
-                onClose={(ticket) => {
-                    handleCloseOrOpenTicket(ticket);
-                }}
+                onClose={(ticket) => { handleCloseOrOpenTicket(ticket); }}
             />
             <ContactModal
                 open={contactModalOpen}
                 onClose={handleCloseContactModal}
                 aria-labelledby="form-dialog-title"
                 contactId={selectedContactId}
-            ></ContactModal>
+            />
             <ConfirmationModal
                 title={
                     deletingContact
-                        ? `${i18n.t(
-                            "contacts.confirmationModal.deleteTitle"
-                        )} ${deletingContact.name}?`
+                        ? `${i18n.t("contacts.confirmationModal.deleteTitle")} ${deletingContact.name}?`
                         : blockingContact
                             ? `Bloquear Contato ${blockingContact.name}?`
                             : unBlockingContact
@@ -486,7 +527,7 @@ const Contacts = () => {
                 }
                 open={confirmOpen}
                 onClose={setConfirmOpen}
-                onConfirm={(e) =>
+                onConfirm={() =>
                     deletingContact
                         ? handleDeleteContact(deletingContact.id)
                         : blockingContact
@@ -498,188 +539,179 @@ const Contacts = () => {
                                     : handleImportExcel()
                 }
             >
-                {exportContact
-                    ?
-                    `${i18n.t("contacts.confirmationModal.exportContact")}`
-                    : deletingContact
-                        ? `${i18n.t("contacts.confirmationModal.deleteMessage")}`
-                        : blockingContact
-                            ? `${i18n.t("contacts.confirmationModal.blockContact")}`
-                            : unBlockingContact
-                                ? `${i18n.t("contacts.confirmationModal.unblockContact")}`
-                                : ImportContacts
-                                    ? `${i18n.t("contacts.confirmationModal.importMessage")}`
-                                    : `${i18n.t(
-                                        "contactListItems.confirmationModal.importMessage"
-                                    )}`}
+                {deletingContact
+                    ? `${i18n.t("contacts.confirmationModal.deleteMessage")}`
+                    : blockingContact
+                        ? `${i18n.t("contacts.confirmationModal.blockContact")}`
+                        : unBlockingContact
+                            ? `${i18n.t("contacts.confirmationModal.unblockContact")}`
+                            : ImportContacts
+                                ? `${i18n.t("contacts.confirmationModal.importMessage")}`
+                                : `${i18n.t("contactListItems.confirmationModal.importMessage")}`}
             </ConfirmationModal>
             <ConfirmationModal
                 title={i18n.t("contacts.confirmationModal.importChat")}
                 open={confirmChatsOpen}
                 onClose={setConfirmChatsOpen}
-                onConfirm={(e) => handleimportChats()}
+                onConfirm={() => handleimportChats()}
             >
                 {i18n.t("contacts.confirmationModal.wantImport")}
             </ConfirmationModal>
+
             <MainHeader>
                 <Title>
-                    {i18n.t("contacts.title")} 
+                    {i18n.t("contacts.title")}
                     {totalCount > 0 && (
-                        <span style={{ fontSize: '0.875rem', color: '#666', marginLeft: '8px' }}>
-                            (Exibindo {contacts.length} de {totalCount})
+                        <span className={classes.countLabel}>
+                            ({contacts.length} de {totalCount})
                         </span>
                     )}
                 </Title>
+
                 <MainHeaderButtonsWrapper>
-                    <TagsFilter
-                        onFiltered={handleSelectedTags}
-                    />
-                    <TextField
-                        select
-                        label="Canal"
-                        value={filterChannel}
-                        onChange={(e) => setFilterChannel(e.target.value)}
-                        style={{ minWidth: 120, marginRight: 8 }}
-                        size="small"
-                    >
-                        <MenuItem value="">Todos</MenuItem>
-                        <MenuItem value="whatsapp">WhatsApp</MenuItem>
-                        <MenuItem value="instagram">Instagram</MenuItem>
-                        <MenuItem value="facebook">Facebook</MenuItem>
-                    </TextField>
-                    <TextField
-                        select
-                        label="Status"
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        style={{ minWidth: 120, marginRight: 8 }}
-                        size="small"
-                    >
-                        <MenuItem value="">Todos</MenuItem>
-                        <MenuItem value="true">Ativo</MenuItem>
-                        <MenuItem value="false">Bloqueado</MenuItem>
-                    </TextField>
-                    <TextField
-                        placeholder={i18n.t("contacts.searchPlaceholder")}
-                        type="search"
-                        value={searchParam}
-                        onChange={handleSearch}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon color="secondary" />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
-                    <Button
-                        variant="outlined"
-                        color="primary"
-                        onClick={handleExportPDF}
-                        disabled={contacts.length === 0}
-                        startIcon={<PictureAsPdfIcon />}
-                        style={{ marginRight: 8 }}
-                    >
-                        PDF
-                    </Button>
-                    <CSVLink
-                        data={prepareExportData()}
-                        filename={`contatos_${new Date().toISOString().split('T')[0]}.csv`}
-                        separator=";"
-                        style={{ textDecoration: 'none' }}
-                    >
-                        <Button
+                    {/* Linha de filtros */}
+                    <Box className={classes.filterBar}>
+                        {/* Busca unificada */}
+                        <TextField
+                            className={classes.searchField}
+                            placeholder="Buscar por nome, número, e-mail..."
+                            type="search"
+                            value={searchParam}
+                            onChange={handleSearch}
+                            size="small"
                             variant="outlined"
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon color="action" fontSize="small" />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+
+                        {/* Filtro por Tags */}
+                        <TagsFilter onFiltered={handleSelectedTags} />
+
+                        {/* Filtro por Canal */}
+                        <FormControl variant="outlined" size="small" className={classes.filterSelect}>
+                            <InputLabel>Canal</InputLabel>
+                            <Select
+                                label="Canal"
+                                value={filterChannel}
+                                onChange={(e) => setFilterChannel(e.target.value)}
+                            >
+                                <MenuItem value="">Todos</MenuItem>
+                                <MenuItem value="whatsapp">
+                                    <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                                        <WhatsApp style={{ color: "#25D366", fontSize: 16 }} /> WhatsApp
+                                    </Box>
+                                </MenuItem>
+                                <MenuItem value="instagram">
+                                    <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                                        <Instagram style={{ color: "#C13584", fontSize: 16 }} /> Instagram
+                                    </Box>
+                                </MenuItem>
+                                <MenuItem value="facebook">
+                                    <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                                        <Facebook style={{ color: "#1877F2", fontSize: 16 }} /> Facebook
+                                    </Box>
+                                </MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        {/* Filtro por Status */}
+                        <FormControl variant="outlined" size="small" className={classes.filterSelect}>
+                            <InputLabel>Status</InputLabel>
+                            <Select
+                                label="Status"
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                            >
+                                <MenuItem value="">Todos</MenuItem>
+                                <MenuItem value="true">
+                                    <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                                        <span className={classes.statusDot} style={{ background: "#4caf50" }} /> Ativo
+                                    </Box>
+                                </MenuItem>
+                                <MenuItem value="false">
+                                    <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                                        <span className={classes.statusDot} style={{ background: "#f44336" }} /> Bloqueado
+                                    </Box>
+                                </MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        {/* Exportar */}
+                        <Box className={classes.exportGroup}>
+                            <Tooltip title="Exportar PDF">
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        color="primary"
+                                        onClick={handleExportPDF}
+                                        disabled={contacts.length === 0}
+                                    >
+                                        <PictureAsPdfIcon />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                            <CSVLink
+                                data={prepareExportData()}
+                                filename={`contatos_${new Date().toISOString().split('T')[0]}.csv`}
+                                separator=";"
+                                style={{ textDecoration: "none", display: "inline-flex" }}
+                            >
+                                <Tooltip title="Exportar CSV/Excel">
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            color="primary"
+                                            disabled={contacts.length === 0}
+                                        >
+                                            <GetAppIcon />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            </CSVLink>
+                        </Box>
+
+                        {/* Importar */}
+                        <PopupState variant="popover" popupId="import-menu">
+                            {(popupState) => (
+                                <React.Fragment>
+                                    <Button
+                                        variant="outlined"
+                                        color="primary"
+                                        size="small"
+                                        {...bindTrigger(popupState)}
+                                        endIcon={<ArrowDropDown />}
+                                    >
+                                        Importar
+                                    </Button>
+                                    <Menu {...bindMenu(popupState)}>
+                                        <MenuItem onClick={() => { setConfirmOpen(true); setImportContacts(true); popupState.close(); }}>
+                                            <ContactPhone fontSize="small" color="primary" style={{ marginRight: 8 }} />
+                                            {i18n.t("contacts.menu.importYourPhone")}
+                                        </MenuItem>
+                                        <MenuItem onClick={() => { setImportContactModalOpen(true); popupState.close(); }}>
+                                            <Backup fontSize="small" color="primary" style={{ marginRight: 8 }} />
+                                            {i18n.t("contacts.menu.importToExcel")}
+                                        </MenuItem>
+                                    </Menu>
+                                </React.Fragment>
+                            )}
+                        </PopupState>
+
+                        {/* Novo Contato */}
+                        <Button
+                            variant="contained"
                             color="primary"
-                            disabled={contacts.length === 0}
-                            startIcon={<GetAppIcon />}
-                            style={{ marginRight: 8 }}
+                            size="small"
+                            onClick={handleOpenContactModal}
                         >
-                            Excel
+                            {i18n.t("contacts.buttons.add")}
                         </Button>
-                    </CSVLink>
-                    <PopupState variant="popover" popupId="demo-popup-menu">
-                        {(popupState) => (
-                            <React.Fragment>
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    {...bindTrigger(popupState)}
-                                >
-                                    Importar
-                                    <ArrowDropDown />
-                                </Button>
-                                <Menu {...bindMenu(popupState)}>
-                                    <MenuItem
-                                        onClick={() => {
-                                            setConfirmOpen(true);
-                                            setImportContacts(true);
-                                            popupState.close();
-                                        }}
-                                    >
-                                        <ContactPhone
-                                            fontSize="small"
-                                            color="primary"
-                                            style={{
-                                                marginRight: 10,
-                                            }}
-                                        />
-                                        {i18n.t("contacts.menu.importYourPhone")}
-                                    </MenuItem>
-                                    <MenuItem
-                                        onClick={() => { setImportContactModalOpen(true) }}
-
-                                    >
-                                        <Backup
-                                            fontSize="small"
-                                            color="primary"
-                                            style={{
-                                                marginRight: 10,
-                                            }}
-                                        />
-                                        {i18n.t("contacts.menu.importToExcel")}
-
-                                    </MenuItem>
-                                    {/* {<MenuItem>
-                        
-                                       <CSVLink
-                                            className={classes.csvbtn}
-                                            separator=";"
-                                            filename={'contacts.csv'}
-                                            data={
-                                                contacts.map((contact) => ({
-                                                    number: hideNum && user.profile === "user" ? contact.isGroup ? contact.number : formatSerializedId(contact.number).slice(0,-6)+"**-**"+ contact.number.slice(-2): contact.isGroup ? contact.number : formatSerializedId(contact.number),
-                                                    firstName: contact.name.split(' ')[0],
-                                                    lastname: String(contact.name).replace(contact.name.split(' ')[0],''),
-                                                    tags: contact?.tags?.name
-                                                }))
-
-                                            }
-                                            
-                                            >
-                                        
-                                        <CloudDownload fontSize="small"
-                                            color="primary"
-                                            style={{
-                                                marginRight: 10,
-                                            
-                                                }}                                                
-                                        />        
-                                        Exportar Excel                                
-                                   </CSVLink>
-                                        
-                                    </MenuItem> } */}
-                                </Menu>
-                            </React.Fragment>
-                        )}
-                    </PopupState>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleOpenContactModal}
-                    >
-                        {i18n.t("contacts.buttons.add")}
-                    </Button>
+                    </Box>
                 </MainHeaderButtonsWrapper>
             </MainHeader>
 
@@ -690,187 +722,226 @@ const Contacts = () => {
                 hideNum={hideNum}
                 userProfile={user.profile}
             />
+
             <Paper
                 className={classes.mainPaper}
                 variant="outlined"
                 onScroll={handleScroll}
             >
-                <>
-                    <input
-                        style={{ display: "none" }}
-                        id="upload"
-                        name="file"
-                        type="file"
-                        accept=".xls,.xlsx"
-                        onChange={() => {
-                            setConfirmOpen(true);
-                        }}
-                        ref={fileUploadRef}
-                    />
-                </>
+                <input
+                    style={{ display: "none" }}
+                    id="upload"
+                    name="file"
+                    type="file"
+                    accept=".xls,.xlsx"
+                    onChange={() => { setConfirmOpen(true); }}
+                    ref={fileUploadRef}
+                />
+
                 <Table size="small">
                     <TableHead>
                         <TableRow>
                             <TableCell padding="checkbox" />
-                            <TableCell>
-                                {i18n.t("contacts.table.name")}
-                            </TableCell>
-                            <TableCell align="center">
-                                {i18n.t("contacts.table.whatsapp")}
-                            </TableCell>
-                            <TableCell align="center">
-                                Canal
-                            </TableCell>
-                            <TableCell align="center">
-                                {i18n.t("contacts.table.email")}
-                            </TableCell>
-                            <TableCell align="center">
-                                {i18n.t("contacts.table.lastMessage")}
-                            </TableCell>
-                            <TableCell align="center">{"Status"}</TableCell>
-                            <TableCell align="center">
-                                {i18n.t("contacts.table.actions")}
-                            </TableCell>
+                            <TableCell>{i18n.t("contacts.table.name")}</TableCell>
+                            <TableCell align="center">{i18n.t("contacts.table.whatsapp")}</TableCell>
+                            <TableCell align="center">Canal</TableCell>
+                            <TableCell align="center">Tags</TableCell>
+                            <TableCell align="center">Último Atendente</TableCell>
+                            <TableCell align="center">Última Interação</TableCell>
+                            <TableCell align="center">Tickets</TableCell>
+                            <TableCell align="center">Status</TableCell>
+                            <TableCell align="center">{i18n.t("contacts.table.actions")}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        <>
-                            {contacts.map((contact) => (
-                                <TableRow key={contact.id}>
+                        {contacts.map((contact) => {
+                            const lastTicket = getLastTicket(contact);
+                            const stats = getTicketStats(contact);
+                            return (
+                                <TableRow key={contact.id} hover>
+                                    {/* Avatar */}
                                     <TableCell style={{ paddingRight: 0 }}>
                                         <Tooltip title={contact.name} arrow>
-                                            <Avatar 
+                                            <Avatar
                                                 src={contact?.urlPicture || undefined}
                                                 alt={contact.name}
-                                                style={{ 
-                                                    width: 40, 
-                                                    height: 40,
-                                                    cursor: 'pointer'
-                                                }}
+                                                style={{ width: 36, height: 36, cursor: "pointer" }}
                                             >
                                                 {!contact?.urlPicture && contact.name?.charAt(0).toUpperCase()}
                                             </Avatar>
                                         </Tooltip>
                                     </TableCell>
-                                    <TableCell>{contact.name}</TableCell>
-                                    <TableCell align="center">
-                                        {hideNum && user.profile === "user" 
-                                            ? contact.isGroup 
-                                                ? contact.number 
-                                                : formatSerializedId(contact.number).slice(0, -6) + "**-**" + contact.number.slice(-2)
-                                            : contact.isGroup 
-                                                ? contact.number 
-                                                : formatSerializedId(contact.number)
-                                        }
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        {contact.channel === "whatsapp" && (
-                                            <Tooltip title="WhatsApp">
-                                                <WhatsApp style={{ color: "green", fontSize: 20 }} />
-                                            </Tooltip>
-                                        )}
-                                        {contact.channel === "instagram" && (
-                                            <Tooltip title="Instagram">
-                                                <Instagram style={{ color: "purple", fontSize: 20 }} />
-                                            </Tooltip>
-                                        )}
-                                        {contact.channel === "facebook" && (
-                                            <Tooltip title="Facebook">
-                                                <Facebook style={{ color: "blue", fontSize: 20 }} />
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        {contact.email}
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        {getDateLastMessage(contact)}
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        {contact.active ? (
-                                            <CheckCircleIcon
-                                                style={{ color: "green" }}
-                                                fontSize="small"
-                                            />
-                                        ) : (
-                                            <CancelIcon
-                                                style={{ color: "red" }}
-                                                fontSize="small"
-                                            />
-                                        )}
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => {
-                                                setContactTicket(contact);
-                                                setNewTicketModalOpen(true);
-                                                // handleSaveTicket(contact.id);
-                                            }}
-                                        >
-                                            {contact.channel === "whatsapp" && (<WhatsApp style={{ color: "green" }} />)}
-                                            {contact.channel === "instagram" && (<Instagram style={{ color: "purple" }} />)}
-                                            {contact.channel === "facebook" && (<Facebook style={{ color: "blue" }} />)}
-                                        </IconButton>
 
-                                        <IconButton
-                                            size="small"
-                                            onClick={() =>
-                                                hadleEditContact(contact.id)
+                                    {/* Nome + email */}
+                                    <TableCell>
+                                        <Typography variant="body2" style={{ fontWeight: 500 }}>
+                                            {contact.name}
+                                        </Typography>
+                                        {contact.email && (
+                                            <Typography variant="caption" color="textSecondary">
+                                                {contact.email}
+                                            </Typography>
+                                        )}
+                                    </TableCell>
+
+                                    {/* Número */}
+                                    <TableCell align="center">
+                                        <Typography variant="body2" className={classes.dateCell}>
+                                            {formatNumber(contact)}
+                                        </Typography>
+                                    </TableCell>
+
+                                    {/* Canal */}
+                                    <TableCell align="center">
+                                        <Tooltip title={getChannelLabel(contact.channel)}>
+                                            {getChannelIcon(contact.channel)}
+                                        </Tooltip>
+                                    </TableCell>
+
+                                    {/* Tags */}
+                                    <TableCell align="center" style={{ maxWidth: 160 }}>
+                                        <Box display="flex" flexWrap="wrap" justifyContent="center">
+                                            {contact.tags?.length > 0
+                                                ? contact.tags.map((tag) => (
+                                                    <Chip
+                                                        key={tag.id}
+                                                        label={tag.name}
+                                                        size="small"
+                                                        className={classes.tagChip}
+                                                        style={{
+                                                            backgroundColor: tag.color || "#e0e0e0",
+                                                            color: "#fff",
+                                                        }}
+                                                    />
+                                                ))
+                                                : <Typography variant="caption" color="textSecondary">—</Typography>
                                             }
-                                        >
-                                            <EditIcon color="secondary" />
-                                        </IconButton>
-                                        <IconButton
-                                            size="small"
-                                            onClick={
-                                                contact.active
-                                                    ? () => {
-                                                        setConfirmOpen(true);
-                                                        setBlockingContact(
-                                                            contact
-                                                        );
-                                                    }
-                                                    : () => {
-                                                        setConfirmOpen(true);
-                                                        setUnBlockingContact(
-                                                            contact
-                                                        );
-                                                    }
-                                            }
-                                        >
-                                            {contact.active ? (
-                                                <BlockIcon color="secondary" />
-                                            ) : (
-                                                <CheckCircleIcon color="secondary" />
+                                        </Box>
+                                    </TableCell>
+
+                                    {/* Último Atendente */}
+                                    <TableCell align="center">
+                                        {lastTicket?.user ? (
+                                            <Box className={classes.lastAgent}>
+                                                <PersonIcon fontSize="inherit" color="action" />
+                                                <Typography variant="caption">
+                                                    {lastTicket.user.name}
+                                                </Typography>
+                                            </Box>
+                                        ) : (
+                                            <Typography variant="caption" color="textSecondary">—</Typography>
+                                        )}
+                                    </TableCell>
+
+                                    {/* Última Interação */}
+                                    <TableCell align="center">
+                                        <Typography variant="caption" className={classes.dateCell}>
+                                            {lastTicket ? formatDate(lastTicket.updatedAt) : "—"}
+                                        </Typography>
+                                    </TableCell>
+
+                                    {/* Tickets stats */}
+                                    <TableCell align="center">
+                                        <Box className={classes.ticketBadge}>
+                                            {stats.open > 0 && (
+                                                <Tooltip title={`${stats.open} aberto(s)`}>
+                                                    <Chip
+                                                        label={`${stats.open} Ab`}
+                                                        size="small"
+                                                        style={{ backgroundColor: "#4caf50", color: "#fff", height: 18, fontSize: "0.65rem" }}
+                                                    />
+                                                </Tooltip>
                                             )}
-                                        </IconButton>
+                                            {stats.pending > 0 && (
+                                                <Tooltip title={`${stats.pending} pendente(s)`}>
+                                                    <Chip
+                                                        label={`${stats.pending} Pe`}
+                                                        size="small"
+                                                        style={{ backgroundColor: "#ff9800", color: "#fff", height: 18, fontSize: "0.65rem" }}
+                                                    />
+                                                </Tooltip>
+                                            )}
+                                            {stats.closed > 0 && (
+                                                <Tooltip title={`${stats.closed} fechado(s)`}>
+                                                    <Chip
+                                                        label={`${stats.closed} Fe`}
+                                                        size="small"
+                                                        style={{ backgroundColor: "#9e9e9e", color: "#fff", height: 18, fontSize: "0.65rem" }}
+                                                    />
+                                                </Tooltip>
+                                            )}
+                                            {stats.open === 0 && stats.pending === 0 && stats.closed === 0 && (
+                                                <Typography variant="caption" color="textSecondary">—</Typography>
+                                            )}
+                                        </Box>
+                                    </TableCell>
+
+                                    {/* Status */}
+                                    <TableCell align="center">
+                                        <Tooltip title={contact.active ? "Ativo" : "Bloqueado"}>
+                                            {contact.active
+                                                ? <CheckCircleIcon style={{ color: "#4caf50" }} fontSize="small" />
+                                                : <CancelIcon style={{ color: "#f44336" }} fontSize="small" />
+                                            }
+                                        </Tooltip>
+                                    </TableCell>
+
+                                    {/* Ações */}
+                                    <TableCell align="center">
+                                        <Tooltip title="Iniciar conversa">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => {
+                                                    setContactTicket(contact);
+                                                    setNewTicketModalOpen(true);
+                                                }}
+                                            >
+                                                {getChannelIcon(contact.channel)}
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Editar">
+                                            <IconButton size="small" onClick={() => hadleEditContact(contact.id)}>
+                                                <EditIcon color="secondary" fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title={contact.active ? "Bloquear" : "Desbloquear"}>
+                                            <IconButton
+                                                size="small"
+                                                onClick={
+                                                    contact.active
+                                                        ? () => { setConfirmOpen(true); setBlockingContact(contact); }
+                                                        : () => { setConfirmOpen(true); setUnBlockingContact(contact); }
+                                                }
+                                            >
+                                                {contact.active
+                                                    ? <BlockIcon color="secondary" fontSize="small" />
+                                                    : <CheckCircleIcon color="secondary" fontSize="small" />
+                                                }
+                                            </IconButton>
+                                        </Tooltip>
                                         <Can
                                             role={user.profile}
                                             perform="contacts-page:deleteContact"
                                             yes={() => (
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => {
-                                                        setConfirmOpen(true);
-                                                        setDeletingContact(
-                                                            contact
-                                                        );
-                                                    }}
-                                                >
-                                                    <DeleteOutlineIcon color="secondary" />
-                                                </IconButton>
+                                                <Tooltip title="Excluir">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                                                    >
+                                                        <DeleteOutlineIcon color="secondary" fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
                                             )}
                                         />
                                     </TableCell>
                                 </TableRow>
-                            ))}
-                            {loading && <TableRowSkeleton avatar columns={3} />}
-                        </>
+                            );
+                        })}
+                        {loading && <TableRowSkeleton avatar columns={9} />}
                     </TableBody>
                 </Table>
             </Paper>
-        </MainContainer >
+        </MainContainer>
     );
 };
 

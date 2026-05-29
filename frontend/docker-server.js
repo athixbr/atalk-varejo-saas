@@ -35,11 +35,14 @@ const windowEnv = {
 const envScript = `<script>window.ENV = ${JSON.stringify(windowEnv)};</script>`;
 indexHtml = indexHtml.replace("</head>", `${envScript}\n</head>`);
 
-// Arquivos estáticos (JS, CSS, imagens, fontes)
-app.use(express.static(BUILD_DIR));
+// Arquivos estáticos (JS, CSS, imagens, fontes) — sem servir index.html aqui
+app.use(express.static(BUILD_DIR, { index: false }));
 
 // SPA fallback — todas as rotas devolvem o index.html com window.ENV
 app.get("/*", (_req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
   res.send(indexHtml);
 });
 

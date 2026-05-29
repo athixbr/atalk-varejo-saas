@@ -36,6 +36,7 @@ import AcceptTicketWithouSelectQueue from "../AcceptTicketWithoutQueueModal";
 import TransferTicketModalCustom from "../TransferTicketModalCustom";
 import ShowTicketOpen from "../ShowTicketOpenModal";
 import { isNil } from "lodash";
+import formatMentions from "../../utils/formatMentions";
 import { toast } from "react-toastify";
 import { Done, HighlightOff, Replay, SwapHoriz } from "@material-ui/icons";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
@@ -481,7 +482,7 @@ const TicketListItemCustom = ({ ticket, searchParam }) => {
                             borderRadius: "50%",
                             top: "-10px",
                         }}
-                        src={`${ticket?.contact?.profilePicUrl}`}
+                        src={`${ticket?.contact?.urlPicture || ticket?.contact?.profilePicUrl}`}
 
                     />
                 </ListItemAvatar>
@@ -545,7 +546,7 @@ const TicketListItemCustom = ({ ticket, searchParam }) => {
 
                                                     <> {ticket.lastMessage.includes('BEGIN:VCARD') ?
                                                         <MarkdownWrapper>Contato</MarkdownWrapper> :
-                                                        <MarkdownWrapper>{truncate(ticket.lastMessage, 30)}</MarkdownWrapper>}
+                                                        <MarkdownWrapper>{truncate(formatMentions(ticket.lastMessage), 30)}</MarkdownWrapper>}
                                                     </>
                                                 }
                                             </>

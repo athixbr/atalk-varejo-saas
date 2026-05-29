@@ -26,6 +26,7 @@ import MarkdownWrapper from "../MarkdownWrapper";
 import { Tooltip } from "@material-ui/core";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import toastError from "../../errors/toastError";
+import formatMentions from "../../utils/formatMentions";
 
 import facebookIcon from "../../assets/facebook.png";
 import insatagramIcon from "../../assets/instagram.png";
@@ -470,7 +471,7 @@ const TicketListItem = ({ ticket }) => {
                             >
                                 {ticket.lastMessage ? (
                                     <MarkdownWrapper>
-                                        {ticket.lastMessage}
+                                        {formatMentions(ticket.lastMessage)}
                                     </MarkdownWrapper>
                                 ) : (
                                     <br />

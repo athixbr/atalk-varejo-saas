@@ -20,6 +20,7 @@ import {
   getContentType,
   GroupMetadata,
   isLidUser,
+  isPnUser,
   jidNormalizedUser,
   delay,
   MessageUpsertType,
@@ -77,6 +78,8 @@ import ShowFileService from "../FileServices/ShowService";
 import typebotListener from "../TypebotServices/typebotListener";
 import { provider } from './providers';
 import { uploadBufferToSpaces, buildSpacesKey } from "../../helpers/uploadToSpaces";
+import UpdateTicketMetricsService from "../TicketMetricsServices/UpdateTicketMetricsService";
+import UpdateTicketUserMetricsService from "../TicketMetricsServices/UpdateTicketUserMetricsService";
 
 const request = require("request");
 
@@ -320,6 +323,39 @@ ${JSON.stringify(msg)}`);
   }
 };
 
+const resolveMentions = async (
+  msg: proto.IWebMessageInfo,
+  body: string | null,
+  companyId: number
+): Promise<string | null> => {
+  if (!body) return body;
+
+  const msgContent = msg.message;
+  const contextInfo =
+    msgContent?.extendedTextMessage?.contextInfo ||
+    msgContent?.imageMessage?.contextInfo ||
+    msgContent?.videoMessage?.contextInfo ||
+    msgContent?.documentMessage?.contextInfo ||
+    msgContent?.audioMessage?.contextInfo;
+
+  const mentionedJids: string[] = (contextInfo?.mentionedJid as string[]) || [];
+  if (mentionedJids.length === 0) return body;
+
+  let resolvedBody = body;
+
+  for (const jid of mentionedJids) {
+    const number = jid.split("@")[0];
+    if (!number) continue;
+
+    const contact = await Contact.findOne({ where: { number, companyId } });
+    if (contact?.name) {
+      resolvedBody = resolvedBody.replace(new RegExp(`@${number}`, "g"), `@${contact.name}`);
+    }
+  }
+
+  return resolvedBody;
+};
+
 export const getQuotedMessage = (msg: proto.IWebMessageInfo) => {
   const body = extractMessageContent(msg.message)[
     Object.keys(msg?.message).values().next().value
@@ -378,6 +414,24 @@ const resolveJidToPhone = async (jid: string): Promise<string> => {
 
 const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   const isGroup = msg.key.remoteJid.includes("g.us");
+
+  // Baileys v7: remoteJidAlt (DMs) e participantAlt (grupos) contêm o JID alternativo
+  // (PN quando primary é LID, ou LID quando primary é PN).
+  // Esta é a fonte mais confiável — disponível em cada mensagem, sem depender de
+  // lid-mapping.update (que raramente dispara, conforme issue #2263 do Baileys).
+  const msgKey = msg.key as any;
+  const altJid: string | undefined = isGroup ? msgKey.participantAlt : msgKey.remoteJidAlt;
+  const primaryJid: string | undefined = isGroup
+    ? (msg.key.participant || msg.key.remoteJid)
+    : msg.key.remoteJid;
+
+  if (altJid && primaryJid) {
+    const lidJid = isLidUser(primaryJid) ? primaryJid : isLidUser(altJid) ? altJid : null;
+    const pnJid  = isPnUser(primaryJid)  ? primaryJid : isPnUser(altJid)  ? altJid  : null;
+    if (lidJid && pnJid) {
+      await storeLidMapping(lidJid, pnJid);
+    }
+  }
 
   if (isGroup) {
     // Para mensagens de grupo, o remetente pode ser @lid no Baileys v7
@@ -493,35 +547,53 @@ const verifyContact = async (
         logger.info(`[LID] verifyContact: placeholder id=${lidPlaceholder.id} atualizado ${originalLid} → ${resolvedJid}`);
       }
     } else {
-      // 2. Cache vazio: buscar no banco pelo remoteJid=lidJid (contato já visto antes)
-      const existingByLid = await Contact.findOne({
-        where: { remoteJid: msgContact.id, companyId }
-      });
-      if (existingByLid) {
-        // Já existe placeholder para esse LID — retorna sem criar duplicata
-        return existingByLid;
-      }
+      // 2. Fallback: signalRepository.lidMapping interno do Baileys (persiste entre restarts via auth)
+      try {
+        const phoneJidFromRepo = await (wbot as any).signalRepository?.lidMapping?.getPNForLID(msgContact.id);
+        if (phoneJidFromRepo && isPnUser(phoneJidFromRepo)) {
+          await storeLidMapping(msgContact.id, phoneJidFromRepo);
+          msgContact = { ...msgContact, id: phoneJidFromRepo };
+          logger.info(`[LID] verifyContact: ${originalLid} resolvido via signalRepository → ${phoneJidFromRepo}`);
 
-      // 3. Tentar achar contato real pelo pushName para evitar duplicata
-      //    Só usa se o nome for único nesta empresa (não ambíguo)
-      if (msgContact.name) {
-        const byName = await Contact.findAll({
-          where: { name: msgContact.name, companyId },
-          order: [["updatedAt", "DESC"]],
-          limit: 2
-        });
-        if (byName.length === 1) {
-          // Nome único → associa o LID a esse contato e retorna ele
-          const realContact = byName[0];
-          await realContact.update({ remoteJid: msgContact.id });
-          await storeLidMapping(msgContact.id, `${realContact.number}@s.whatsapp.net`);
-          logger.info(`[LID] verifyContact: ${msgContact.id} associado ao contato ${realContact.id} via pushName "${msgContact.name}"`);
-          return realContact;
+          const phoneNumber = phoneJidFromRepo.replace(/\D/g, "");
+          const lidPlaceholder = await Contact.findOne({ where: { remoteJid: originalLid, companyId } });
+          if (lidPlaceholder && (lidPlaceholder.number !== phoneNumber || lidPlaceholder.remoteJid !== phoneJidFromRepo)) {
+            await lidPlaceholder.update({ number: phoneNumber, remoteJid: phoneJidFromRepo });
+          }
+          // Segue o fluxo normal com o JID real
         }
-      }
+      } catch (_) { /* signalRepository pode não estar disponível — ignora */ }
 
-      // 4. Nenhuma correspondência — criar placeholder (será fundido via lid-mapping.update)
-      logger.info(`[LID] verifyContact: ${msgContact.id} sem resolução, criando placeholder`);
+      if (isLidUser(msgContact.id)) {
+        // 3. Cache ainda vazio: buscar no banco pelo remoteJid=lidJid (contato já visto antes)
+        const existingByLid = await Contact.findOne({
+          where: { remoteJid: msgContact.id, companyId }
+        });
+        if (existingByLid) {
+          // Já existe placeholder para esse LID — retorna sem criar duplicata
+          return existingByLid;
+        }
+
+        // 4. Tentar achar contato real pelo pushName para evitar duplicata
+        //    Só usa se o nome for único nesta empresa (não ambíguo)
+        if (msgContact.name) {
+          const byName = await Contact.findAll({
+            where: { name: msgContact.name, companyId },
+            order: [["updatedAt", "DESC"]],
+            limit: 2
+          });
+          if (byName.length === 1) {
+            const realContact = byName[0];
+            await realContact.update({ remoteJid: msgContact.id });
+            await storeLidMapping(msgContact.id, `${realContact.number}@s.whatsapp.net`);
+            logger.info(`[LID] verifyContact: ${msgContact.id} associado ao contato ${realContact.id} via pushName "${msgContact.name}"`);
+            return realContact;
+          }
+        }
+
+        // 5. Nenhuma correspondência — criar placeholder (será resolvido na próxima mensagem)
+        logger.info(`[LID] verifyContact: ${msgContact.id} sem resolução, criando placeholder`);
+      }
     }
   }
   // --- fim tratamento LID ---
@@ -717,7 +789,7 @@ export const verifyMediaMessage = async (
       console.log(msg);
     }
 
-    const body = getBodyMessage(msg);
+    const body = await resolveMentions(msg, getBodyMessage(msg), companyId);
 
     const messageData = {
       wid: msg.key.id,
@@ -799,8 +871,8 @@ export const verifyMessage = async (
 ) => {
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
-  const body = getBodyMessage(msg);
   const companyId = ticket.companyId;
+  const body = await resolveMentions(msg, getBodyMessage(msg), companyId);
 
   const messageData = {
     wid: msg.key.id,
@@ -835,6 +907,16 @@ export const verifyMessage = async (
   }
 
   await CreateMessageService({ messageData, companyId: companyId });
+
+  // Atualiza métricas de tempo real (ignora erros para não quebrar o fluxo)
+  if (msg.key.fromMe) {
+    UpdateTicketMetricsService({ ticketId: ticket.id, type: "user_message", userId: ticket.userId }).catch(() => {});
+    if (ticket.userId) {
+      UpdateTicketUserMetricsService({ ticketId: ticket.id, userId: ticket.userId, action: "message" }).catch(() => {});
+    }
+  } else {
+    UpdateTicketMetricsService({ ticketId: ticket.id, type: "client_message" }).catch(() => {});
+  }
 
   if (!msg.key.fromMe && ticket.status === "closed") {
     await ticket.update({ status: "pending" });
@@ -1603,7 +1685,7 @@ const verifyQueue = async (
         status: ticket.status,
         queueId: ticket.queueId,
         userId: ticket.userId,
-        lastMessage: getBodyMessage(msg)
+        lastMessage: await resolveMentions(msg, getBodyMessage(msg), companyId)
       })
 
 

@@ -11,6 +11,9 @@ import ShowService from "../services/AnnouncementService/ShowService";
 import UpdateService from "../services/AnnouncementService/UpdateService";
 import DeleteService from "../services/AnnouncementService/DeleteService";
 import FindService from "../services/AnnouncementService/FindService";
+import FindAdminNotificationsService from "../services/AnnouncementService/FindAdminNotificationsService";
+import DismissService from "../services/AnnouncementService/DismissService";
+import MarkReadService from "../services/AnnouncementService/MarkReadService";
 
 import Announcement from "../models/Announcement";
 
@@ -170,6 +173,41 @@ export const mediaUpload = async (
   } catch (err: any) {
     throw new AppError(err.message);
   }
+};
+
+export const adminNotifications = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id: userId, companyId } = req.user;
+
+  const records = await FindAdminNotificationsService({ userId, companyId });
+
+  return res.status(200).json(records);
+};
+
+export const dismiss = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id: userId } = req.user;
+  const announcementId = Number(req.params.id);
+
+  const record = await DismissService({ announcementId, userId });
+
+  return res.status(200).json(record);
+};
+
+export const markRead = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id: userId } = req.user;
+  const announcementId = Number(req.params.id);
+
+  const record = await MarkReadService({ announcementId, userId });
+
+  return res.status(200).json(record);
 };
 
 export const deleteMedia = async (
