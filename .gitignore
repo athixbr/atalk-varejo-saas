@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.*
+
+# Build output
+dist/
+build/
+
+# Pasta baileys legada (não utilizada)
+baileys-2026/
+
+# Arquivos de mídia/uploads (armazenados em volume local ou S3)
+public/
+
+# OS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# WhatsApp session cache
+.wwebjs_cache/
+.wwebjs_auth/
+
+# Package locks
+package-lock.json
+yarn.lock
+yarn-error.log
+
+# Backups
+backups/
+*.backup
+migrate-progress.json
+
+# PM2
+ecosystem*.config.cjs
+pm2-*.json
