@@ -47,6 +47,7 @@ import Kanban from "../pages/Kanban";
 import TagsKanban from "../pages/TagsKanban";
 import GridReport from '../pages/Reports/GridReport';
 import TicketTimeReports from '../pages/Reports/TicketTimeReports';
+import TicketsLogsReport from '../pages/Reports/TicketsLogsReport';
 import UserPerformanceReports from '../pages/Reports/UserPerformanceReports';
 import Tarefas from "../pages/Tarefas";
 import Agenda from "../pages/Agenda";
@@ -101,6 +102,7 @@ import ArticleForm from "../pages/BaseConhecimento/ArticleForm";
 import CategoriesManager from "../pages/BaseConhecimento/CategoriesManager";
 import AdminNotifications from "../pages/AdminNotifications";
 import WhatsappStory from "../pages/WhatsappStory";
+import Search from "../pages/Search";
 
 const Routes = () => {
   const [showCampaigns, setShowCampaigns] = useState(false);
@@ -128,6 +130,7 @@ const Routes = () => {
                 <Route exact path="/" component={Dashboard} isPrivate />
                 <Route exact path="/reports" component={GridReport} isPrivate />
                 <Route exact path="/reports/tickets/time-analysis" component={TicketTimeReports} isPrivate />
+                <Route exact path="/reports/tickets/logs" component={TicketsLogsReport} isPrivate />
                 <Route exact path="/reports/users/performance" component={UserPerformanceReports} isPrivate />
                 <Route exact path="/tickets/:ticketId?" component={TicketResponsiveContainer} isPrivate />
                 <Route exact path="/connections" component={Connections} isPrivate />
@@ -228,6 +231,7 @@ const Routes = () => {
                 <Route exact path="/grupos/campanha/:id" component={GruposNovaCampanha} isPrivate />
                 <Route exact path="/grupos" component={Grupos} isPrivate />
                 <Route exact path="/whatsapp-stories" component={WhatsappStory} isPrivate />
+                <Route exact path="/busca" component={Search} isPrivate />
 
 
                 {showCampaigns && (

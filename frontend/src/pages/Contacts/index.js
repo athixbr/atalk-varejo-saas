@@ -15,6 +15,7 @@ import TableBody from "@material-ui/core/TableBody";
 import TableCell from "@material-ui/core/TableCell";
 import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
+import TablePagination from "@material-ui/core/TablePagination";
 import Paper from "@material-ui/core/Paper";
 import Button from "@material-ui/core/Button";
 import Avatar from "@material-ui/core/Avatar";
@@ -68,19 +69,7 @@ import useCompanySettings from "../../hooks/useSettings/companySettings";
 
 const reducer = (state, action) => {
     if (action.type === "LOAD_CONTACTS") {
-        const contacts = action.payload;
-        const newContacts = [];
-
-        contacts.forEach((contact) => {
-            const contactIndex = state.findIndex((c) => c.id === contact.id);
-            if (contactIndex !== -1) {
-                state[contactIndex] = contact;
-            } else {
-                newContacts.push(contact);
-            }
-        });
-
-        return [...state, ...newContacts];
+        return action.payload;
     }
 
     if (action.type === "UPDATE_CONTACTS") {
@@ -182,6 +171,59 @@ const useStyles = makeStyles((theme) => ({
         display: "inline-block",
         marginRight: 4,
     },
+    tableHead: {
+        "& th": {
+            backgroundColor: theme.palette.type === "dark"
+                ? theme.palette.grey[800]
+                : theme.palette.grey[100],
+            fontWeight: 600,
+            fontSize: "0.78rem",
+            color: theme.palette.text.primary,
+            borderBottom: `2px solid ${theme.palette.divider}`,
+            whiteSpace: "nowrap",
+        },
+    },
+    tableRow: {
+        "&:hover": {
+            backgroundColor: theme.palette.type === "dark"
+                ? "rgba(255,255,255,0.04)"
+                : "rgba(0,0,0,0.03)",
+        },
+    },
+    lidBadge: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        padding: "1px 6px",
+        borderRadius: 10,
+        backgroundColor: theme.palette.type === "dark"
+            ? "rgba(37,211,102,0.12)"
+            : "rgba(37,211,102,0.08)",
+        border: `1px solid rgba(37,211,102,0.3)`,
+        fontSize: "0.68rem",
+        color: theme.palette.text.secondary,
+        whiteSpace: "nowrap",
+    },
+    unavailableBadge: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        padding: "1px 6px",
+        borderRadius: 10,
+        backgroundColor: theme.palette.type === "dark"
+            ? "rgba(158,158,158,0.12)"
+            : "rgba(158,158,158,0.08)",
+        border: `1px solid rgba(158,158,158,0.3)`,
+        fontSize: "0.68rem",
+        color: theme.palette.text.secondary,
+        whiteSpace: "nowrap",
+    },
+    actionButtons: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+    },
 }));
 
 const Contacts = () => {
@@ -205,7 +247,6 @@ const Contacts = () => {
     const [unBlockingContact, setUnBlockingContact] = useState(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmChatsOpen, setConfirmChatsOpen] = useState(false);
-    const [hasMore, setHasMore] = useState(false);
     const [newTicketModalOpen, setNewTicketModalOpen] = useState(false);
     const [contactTicket, setContactTicket] = useState({});
     const fileUploadRef = useRef(null);
@@ -262,7 +303,6 @@ const Contacts = () => {
                         },
                     });
                     dispatch({ type: "LOAD_CONTACTS", payload: data.contacts });
-                    setHasMore(data.hasMore);
                     setTotalCount(data.count);
                     setLoading(false);
                 } catch (err) {
@@ -476,16 +516,8 @@ ${exportData.map(c => `<tr>
         }
     };
 
-    const loadMore = () => {
-        setPageNumber((prevState) => prevState + 1);
-    };
-
-    const handleScroll = (e) => {
-        if (!hasMore || loading) return;
-        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-        if (scrollHeight - (scrollTop + 100) < clientHeight) {
-            loadMore();
-        }
+    const handleChangePage = (_event, newPage) => {
+        setPageNumber(newPage + 1);
     };
 
     const getChannelIcon = (channel) => {
@@ -498,6 +530,45 @@ ${exportData.map(c => `<tr>
         if (channel === "instagram") return "Instagram";
         if (channel === "facebook") return "Facebook";
         return "WhatsApp";
+    };
+
+    const renderContactNumber = (contact) => {
+        const remoteJid = contact.remoteJid || "";
+        const rawNumber = String(contact.number || "");
+        const digitsOnly = rawNumber.replace(/\D/g, "");
+
+        // Contato com identificador interno do WhatsApp (@lid)
+        const isLid = remoteJid.includes("@lid") || digitsOnly.length > 13;
+
+        // Número muito curto ou ausente
+        const isUnavailable = !contact.number || digitsOnly.length < 8;
+
+        if (isLid) {
+            return (
+                <Tooltip title="Contato importado via identificador interno do WhatsApp (não possui número telefônico visível)" arrow>
+                    <span className={classes.lidBadge}>
+                        <WhatsApp style={{ fontSize: 11, color: "#25D366" }} />
+                        WhatsApp ID
+                    </span>
+                </Tooltip>
+            );
+        }
+
+        if (isUnavailable) {
+            return (
+                <Tooltip title="Número de telefone não disponível para este contato" arrow>
+                    <span className={classes.unavailableBadge}>
+                        Não disponível
+                    </span>
+                </Tooltip>
+            );
+        }
+
+        return (
+            <Typography variant="body2" className={classes.dateCell}>
+                {formatNumber(contact)}
+            </Typography>
+        );
     };
 
     return (
@@ -726,7 +797,6 @@ ${exportData.map(c => `<tr>
             <Paper
                 className={classes.mainPaper}
                 variant="outlined"
-                onScroll={handleScroll}
             >
                 <input
                     style={{ display: "none" }}
@@ -738,12 +808,12 @@ ${exportData.map(c => `<tr>
                     ref={fileUploadRef}
                 />
 
-                <Table size="small">
-                    <TableHead>
+                <Table size="small" stickyHeader>
+                    <TableHead className={classes.tableHead}>
                         <TableRow>
                             <TableCell padding="checkbox" />
                             <TableCell>{i18n.t("contacts.table.name")}</TableCell>
-                            <TableCell align="center">{i18n.t("contacts.table.whatsapp")}</TableCell>
+                            <TableCell align="center">Número / Contato</TableCell>
                             <TableCell align="center">Canal</TableCell>
                             <TableCell align="center">Tags</TableCell>
                             <TableCell align="center">Último Atendente</TableCell>
@@ -758,14 +828,14 @@ ${exportData.map(c => `<tr>
                             const lastTicket = getLastTicket(contact);
                             const stats = getTicketStats(contact);
                             return (
-                                <TableRow key={contact.id} hover>
+                                <TableRow key={contact.id} className={classes.tableRow}>
                                     {/* Avatar */}
                                     <TableCell style={{ paddingRight: 0 }}>
                                         <Tooltip title={contact.name} arrow>
                                             <Avatar
                                                 src={contact?.urlPicture || undefined}
                                                 alt={contact.name}
-                                                style={{ width: 36, height: 36, cursor: "pointer" }}
+                                                style={{ width: 34, height: 34, cursor: "pointer", fontSize: "0.85rem" }}
                                             >
                                                 {!contact?.urlPicture && contact.name?.charAt(0).toUpperCase()}
                                             </Avatar>
@@ -773,34 +843,34 @@ ${exportData.map(c => `<tr>
                                     </TableCell>
 
                                     {/* Nome + email */}
-                                    <TableCell>
-                                        <Typography variant="body2" style={{ fontWeight: 500 }}>
+                                    <TableCell style={{ minWidth: 160, maxWidth: 240 }}>
+                                        <Typography variant="body2" style={{ fontWeight: 500, lineHeight: 1.3 }}>
                                             {contact.name}
                                         </Typography>
                                         {contact.email && (
-                                            <Typography variant="caption" color="textSecondary">
+                                            <Typography variant="caption" color="textSecondary" style={{ display: "block" }}>
                                                 {contact.email}
                                             </Typography>
                                         )}
                                     </TableCell>
 
                                     {/* Número */}
-                                    <TableCell align="center">
-                                        <Typography variant="body2" className={classes.dateCell}>
-                                            {formatNumber(contact)}
-                                        </Typography>
+                                    <TableCell align="center" style={{ minWidth: 140 }}>
+                                        {renderContactNumber(contact)}
                                     </TableCell>
 
                                     {/* Canal */}
                                     <TableCell align="center">
-                                        <Tooltip title={getChannelLabel(contact.channel)}>
-                                            {getChannelIcon(contact.channel)}
+                                        <Tooltip title={getChannelLabel(contact.channel)} arrow>
+                                            <span style={{ display: "inline-flex", alignItems: "center" }}>
+                                                {getChannelIcon(contact.channel)}
+                                            </span>
                                         </Tooltip>
                                     </TableCell>
 
                                     {/* Tags */}
-                                    <TableCell align="center" style={{ maxWidth: 160 }}>
-                                        <Box display="flex" flexWrap="wrap" justifyContent="center">
+                                    <TableCell align="center" style={{ maxWidth: 180 }}>
+                                        <Box display="flex" flexWrap="wrap" justifyContent="center" style={{ gap: 2 }}>
                                             {contact.tags?.length > 0
                                                 ? contact.tags.map((tag) => (
                                                     <Chip
@@ -809,8 +879,9 @@ ${exportData.map(c => `<tr>
                                                         size="small"
                                                         className={classes.tagChip}
                                                         style={{
-                                                            backgroundColor: tag.color || "#e0e0e0",
+                                                            backgroundColor: tag.color || "#90a4ae",
                                                             color: "#fff",
+                                                            fontWeight: 500,
                                                         }}
                                                     />
                                                 ))
@@ -820,11 +891,11 @@ ${exportData.map(c => `<tr>
                                     </TableCell>
 
                                     {/* Último Atendente */}
-                                    <TableCell align="center">
+                                    <TableCell align="center" style={{ minWidth: 100 }}>
                                         {lastTicket?.user ? (
                                             <Box className={classes.lastAgent}>
                                                 <PersonIcon fontSize="inherit" color="action" />
-                                                <Typography variant="caption">
+                                                <Typography variant="caption" style={{ maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
                                                     {lastTicket.user.name}
                                                 </Typography>
                                             </Box>
@@ -844,29 +915,29 @@ ${exportData.map(c => `<tr>
                                     <TableCell align="center">
                                         <Box className={classes.ticketBadge}>
                                             {stats.open > 0 && (
-                                                <Tooltip title={`${stats.open} aberto(s)`}>
+                                                <Tooltip title={`${stats.open} aberto(s)`} arrow>
                                                     <Chip
                                                         label={`${stats.open} Ab`}
                                                         size="small"
-                                                        style={{ backgroundColor: "#4caf50", color: "#fff", height: 18, fontSize: "0.65rem" }}
+                                                        style={{ backgroundColor: "#43a047", color: "#fff", height: 18, fontSize: "0.65rem", fontWeight: 600 }}
                                                     />
                                                 </Tooltip>
                                             )}
                                             {stats.pending > 0 && (
-                                                <Tooltip title={`${stats.pending} pendente(s)`}>
+                                                <Tooltip title={`${stats.pending} pendente(s)`} arrow>
                                                     <Chip
                                                         label={`${stats.pending} Pe`}
                                                         size="small"
-                                                        style={{ backgroundColor: "#ff9800", color: "#fff", height: 18, fontSize: "0.65rem" }}
+                                                        style={{ backgroundColor: "#fb8c00", color: "#fff", height: 18, fontSize: "0.65rem", fontWeight: 600 }}
                                                     />
                                                 </Tooltip>
                                             )}
                                             {stats.closed > 0 && (
-                                                <Tooltip title={`${stats.closed} fechado(s)`}>
+                                                <Tooltip title={`${stats.closed} fechado(s)`} arrow>
                                                     <Chip
                                                         label={`${stats.closed} Fe`}
                                                         size="small"
-                                                        style={{ backgroundColor: "#9e9e9e", color: "#fff", height: 18, fontSize: "0.65rem" }}
+                                                        style={{ backgroundColor: "#757575", color: "#fff", height: 18, fontSize: "0.65rem", fontWeight: 600 }}
                                                     />
                                                 </Tooltip>
                                             )}
@@ -878,61 +949,65 @@ ${exportData.map(c => `<tr>
 
                                     {/* Status */}
                                     <TableCell align="center">
-                                        <Tooltip title={contact.active ? "Ativo" : "Bloqueado"}>
-                                            {contact.active
-                                                ? <CheckCircleIcon style={{ color: "#4caf50" }} fontSize="small" />
-                                                : <CancelIcon style={{ color: "#f44336" }} fontSize="small" />
-                                            }
+                                        <Tooltip title={contact.active ? "Ativo" : "Bloqueado"} arrow>
+                                            <span>
+                                                {contact.active
+                                                    ? <CheckCircleIcon style={{ color: "#43a047" }} fontSize="small" />
+                                                    : <CancelIcon style={{ color: "#e53935" }} fontSize="small" />
+                                                }
+                                            </span>
                                         </Tooltip>
                                     </TableCell>
 
                                     {/* Ações */}
                                     <TableCell align="center">
-                                        <Tooltip title="Iniciar conversa">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => {
-                                                    setContactTicket(contact);
-                                                    setNewTicketModalOpen(true);
-                                                }}
-                                            >
-                                                {getChannelIcon(contact.channel)}
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Editar">
-                                            <IconButton size="small" onClick={() => hadleEditContact(contact.id)}>
-                                                <EditIcon color="secondary" fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title={contact.active ? "Bloquear" : "Desbloquear"}>
-                                            <IconButton
-                                                size="small"
-                                                onClick={
-                                                    contact.active
-                                                        ? () => { setConfirmOpen(true); setBlockingContact(contact); }
-                                                        : () => { setConfirmOpen(true); setUnBlockingContact(contact); }
-                                                }
-                                            >
-                                                {contact.active
-                                                    ? <BlockIcon color="secondary" fontSize="small" />
-                                                    : <CheckCircleIcon color="secondary" fontSize="small" />
-                                                }
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Can
-                                            role={user.profile}
-                                            perform="contacts-page:deleteContact"
-                                            yes={() => (
-                                                <Tooltip title="Excluir">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
-                                                    >
-                                                        <DeleteOutlineIcon color="secondary" fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            )}
-                                        />
+                                        <Box className={classes.actionButtons}>
+                                            <Tooltip title="Iniciar conversa" arrow>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => {
+                                                        setContactTicket(contact);
+                                                        setNewTicketModalOpen(true);
+                                                    }}
+                                                >
+                                                    {getChannelIcon(contact.channel)}
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Editar contato" arrow>
+                                                <IconButton size="small" onClick={() => hadleEditContact(contact.id)}>
+                                                    <EditIcon color="secondary" fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title={contact.active ? "Bloquear" : "Desbloquear"} arrow>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={
+                                                        contact.active
+                                                            ? () => { setConfirmOpen(true); setBlockingContact(contact); }
+                                                            : () => { setConfirmOpen(true); setUnBlockingContact(contact); }
+                                                    }
+                                                >
+                                                    {contact.active
+                                                        ? <BlockIcon color="secondary" fontSize="small" />
+                                                        : <CheckCircleIcon color="secondary" fontSize="small" />
+                                                    }
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Can
+                                                role={user.profile}
+                                                perform="contacts-page:deleteContact"
+                                                yes={() => (
+                                                    <Tooltip title="Excluir" arrow>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => { setConfirmOpen(true); setDeletingContact(contact); }}
+                                                        >
+                                                            <DeleteOutlineIcon color="secondary" fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+                                            />
+                                        </Box>
                                     </TableCell>
                                 </TableRow>
                             );
@@ -940,6 +1015,17 @@ ${exportData.map(c => `<tr>
                         {loading && <TableRowSkeleton avatar columns={9} />}
                     </TableBody>
                 </Table>
+                <TablePagination
+                    component="div"
+                    count={totalCount}
+                    page={pageNumber - 1}
+                    onChangePage={handleChangePage}
+                    rowsPerPage={250}
+                    rowsPerPageOptions={[250]}
+                    labelDisplayedRows={({ from, to, count }) =>
+                        `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
+                    }
+                />
             </Paper>
         </MainContainer>
     );

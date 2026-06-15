@@ -63,6 +63,7 @@ import {
   Paperclip,
   People,
   Profile2User,
+  SearchNormal1,
   Setting,
   Setting2,
   Setting3,
@@ -652,6 +653,7 @@ const MainListItems = (props, { collapsed }) => {
     location.pathname === "/tickets" ||
     location.pathname === "/contacts" ||
     location.pathname === "/connections" ||
+    location.pathname === "/busca" ||
     isCampaignRouteActive ||
     location.pathname.startsWith("/grupos");
 
@@ -784,6 +786,13 @@ const MainListItems = (props, { collapsed }) => {
                       icon={<People />}
                       tooltip={collapsed}
                     />
+                    <ListItemLink
+                      small
+                      to="/reports/tickets/logs"
+                      primary="Logs Tempo Real"
+                      icon={<AccessTime />}
+                      tooltip={collapsed}
+                    />
                   </>
                 )}
               />
@@ -821,6 +830,13 @@ const MainListItems = (props, { collapsed }) => {
         to="/tickets"
         primary={i18n.t("mainDrawer.listItems.tickets")}
         icon={<Whatsapp />}
+        tooltip={collapsed}
+      />
+
+      <ListItemLink
+        to="/busca"
+        primary="Busca"
+        icon={<SearchNormal1 />}
         tooltip={collapsed}
       />
 
