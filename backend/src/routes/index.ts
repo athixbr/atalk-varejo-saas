@@ -76,6 +76,7 @@ import userClientesPreferencesRoutes from "./userClientesPreferencesRoutes";
 import whatsappGroupRoutes from "./whatsappGroupRoutes";
 import wwebjsRoutes from "./wwebjsRoutes";
 import documentReaderRoutes from "./documentReaderRoutes";
+import whatsappStoryRoutes from "./whatsappStoryRoutes";
 
 const routes = Router();
 
@@ -170,5 +171,6 @@ routes.use(billingRoutes);
 routes.use(campaignGrupoRoutes);
 routes.use(whatsappGroupRoutes);
 routes.use(wwebjsRoutes);
+routes.use(whatsappStoryRoutes);
 
 export default routes;

@@ -130,6 +130,34 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
         const msgRetryCounterCache = new NodeCache();
 
+        // Cache de dispositivos persistido no Redis para evitar delay no primeiro envio após restart.
+        // Sem este cache, o primeiro envio a cada contato requer uma consulta usync ao servidor WA
+        // que demora 20-60s. Com cache Redis os dispositivos persistem entre restarts.
+        const redisDevicesCache = {
+          mget: async (users: string[]) => {
+            const result: Record<string, any> = {};
+            await Promise.all(users.map(async (user) => {
+              const cached = await cacheLayer.get(`devicesCache:${whatsapp.id}:${user}`);
+              if (cached) {
+                try { result[user] = JSON.parse(cached); } catch {}
+              }
+            }));
+            return result;
+          },
+          mset: async (entries: Array<{key: string, value: any}>) => {
+            await Promise.all(entries.map(({ key, value }) =>
+              cacheLayer.set(`devicesCache:${whatsapp.id}:${key}`, JSON.stringify(value), 'EX', 86400)
+            ));
+          },
+          get: async (user: string) => {
+            const cached = await cacheLayer.get(`devicesCache:${whatsapp.id}:${user}`);
+            return cached ? JSON.parse(cached) : undefined;
+          },
+          set: async (key: string, value: any) => {
+            await cacheLayer.set(`devicesCache:${whatsapp.id}:${key}`, JSON.stringify(value), 'EX', 86400);
+          }
+        };
+
         wsocket = makeWASocket({
           logger: loggerBaileys,
           printQRInTerminal: false,
@@ -139,12 +167,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             keys: makeCacheableSignalKeyStore(state.keys, logger),
           },
           version,
-          defaultQueryTimeoutMs: 60000,
-          // retryRequestDelayMs: 250,
-          // keepAliveIntervalMs: 1000 * 60 * 10 * 3,
+          defaultQueryTimeoutMs: 10000,
+          connectTimeoutMs: 30000,
+          keepAliveIntervalMs: 15000,
+          retryRequestDelayMs: 250,
           msgRetryCounterCache,
+          // @ts-ignore
+          userDevicesCache: redisDevicesCache,
           shouldIgnoreJid: jid => isJidBroadcast(jid),
-          syncFullHistory: true,
+          syncFullHistory: false,
         });
 
 
@@ -432,17 +463,43 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               }
             });
 
+            // Helper: buscar foto do contato com timeout
+            const fetchProfilePic = async (jid: string): Promise<string | null> => {
+              try {
+                const picPromise = wsocket.profilePictureUrl(jid, "image");
+                const timeout = new Promise<string>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000));
+                const url = await Promise.race([picPromise, timeout]);
+                return url || null;
+              } catch {
+                return null;
+              }
+            };
+
+            const io = getIO();
+
             if (lidContact && phoneContact && lidContact.id !== phoneContact.id) {
               // MERGE: dois contatos para a mesma pessoa → fundir no contato real
               await Ticket.update({ contactId: phoneContact.id }, { where: { contactId: lidContact.id } });
               await lidContact.destroy();
               logger.info(`[LID] merge: contato ${lidContact.id} (${lidJid}) → ${phoneContact.id} (${phoneJid})`);
 
+              // Atualiza foto do contato real (CDN URL → download local) se não tiver
+              if (!phoneContact.profilePicUrl || phoneContact.profilePicUrl.includes("nopicture")) {
+                const picUrl = await fetchProfilePic(phoneJid);
+                if (picUrl) {
+                  // Usa CreateOrUpdateContactService para baixar e salvar localmente
+                  CreateOrUpdateContactService({
+                    name: phoneContact.name,
+                    number: phoneNumber,
+                    isGroup: false,
+                    companyId,
+                    remoteJid: phoneJid,
+                    profilePicUrl: picUrl
+                  }).catch(() => {});
+                }
+              }
+
               // Deduplicar tickets abertos após o merge.
-              // Pode ocorrer que o contato real já tinha um ticket aberto (ticket B)
-              // e o placeholder LID também tinha um (ticket A). Após a migração acima
-              // ambos ficam associados ao mesmo contactId → dois tickets abertos.
-              // Solução: por whatsappId, mantém o mais antigo (maior histórico) e fecha os demais.
               const openStatuses = ["open", "pending", "group", "nps", "lgpd"];
               const dupTickets = await Ticket.findAll({
                 where: {
@@ -468,12 +525,23 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 }
               }
             } else if (lidContact && !phoneContact) {
-              // Só existe contato LID → atualiza para número/remoteJid real
-              await lidContact.update({ number: phoneNumber, remoteJid: phoneJid });
+              // Só existe contato LID → atualiza para número/remoteJid real e baixa foto
+              const picUrl = (!lidContact.profilePicUrl || lidContact.profilePicUrl.includes("nopicture"))
+                ? await fetchProfilePic(phoneJid)
+                : null;
+              // Usa CreateOrUpdateContactService para download local da foto
+              CreateOrUpdateContactService({
+                name: lidContact.name || phoneNumber,
+                number: phoneNumber,
+                isGroup: false,
+                companyId,
+                remoteJid: phoneJid,
+                profilePicUrl: picUrl || lidContact.profilePicUrl || `${process.env.FRONTEND_URL}/nopicture.png`
+              }).catch(() => {});
               logger.info(`[LID] resolvido: contato ${lidContact.id} atualizado de ${lidJid} → ${phoneJid}`);
             }
           } catch (e) {
-            // ignore erros individuais
+            logger.warn(`[LID] applyLidMapping erro: ${e}`);
           }
         };
 

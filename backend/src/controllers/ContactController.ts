@@ -28,6 +28,7 @@ import FindContactTags from "../services/ContactServices/FindContactTags";
 import { log } from "console";
 import ToggleDisableBotContactService from "../services/ContactServices/ToggleDisableBotContactService";
 import Whatsapp from "../models/Whatsapp";
+import Contact from "../models/Contact";
 
 type IndexQuery = {
   searchParam: string;
@@ -160,7 +161,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   let validNumber = newContact.number;
 
   if (whatsapps.length != 0) {
-    validNumber = await CheckContactNumber(newContact.number, companyId);
+    try {
+      validNumber = await CheckContactNumber(newContact.number, companyId);
+    } catch (err) {
+      // Validação WhatsApp falhou (conexão instável ou número não encontrado)
+      // Mantém o número original informado pelo usuário
+    }
   }
 
 
@@ -169,12 +175,20 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
    */
   // const profilePicUrl = await GetProfilePicUrl(validNumber.jid, companyId);
 
-  const contact = await CreateContactService({
-    ...newContact,
-    number: validNumber,
-    // profilePicUrl,
-    companyId
-  });
+  let contact;
+  try {
+    contact = await CreateContactService({
+      ...newContact,
+      number: validNumber,
+      // profilePicUrl,
+      companyId
+    });
+  } catch (err: any) {
+    if (err.message !== "ERR_DUPLICATED_CONTACT") throw err;
+    // Contato já existe — retorna o existente em vez de erro
+    contact = await Contact.findOne({ where: { number: validNumber, companyId } });
+    if (!contact) throw err;
+  }
 
   const io = getIO();
   io.emit(`company-${companyId}-contact`, {
@@ -215,11 +229,16 @@ export const update = async (
     throw new AppError(err.message);
   }
 
-  await CheckIsValidContact(contactData.number, companyId);
-  const validNumber = await CheckContactNumber(contactData.number, companyId);
-
-  const number = validNumber;
-  contactData.number = number;
+  if (contactData.number) {
+    try {
+      await CheckIsValidContact(contactData.number, companyId);
+      const validNumber = await CheckContactNumber(contactData.number, companyId);
+      contactData.number = validNumber;
+    } catch (err) {
+      // Validação WhatsApp falhou (conexão instável ou número não encontrado)
+      // Mantém o número original informado pelo usuário
+    }
+  }
 
   const { contactId } = req.params;
 

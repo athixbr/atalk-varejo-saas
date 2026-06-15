@@ -1,5 +1,5 @@
 // @ts-ignore
-import { Sequelize, Op, Filterable } from "sequelize";
+import { Sequelize, Op } from "sequelize";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import ContactTag from "../../models/ContactTag";
@@ -37,88 +37,68 @@ const ListContactsService = async ({
   const rawSearch = searchParam.trim();
   const sanitizedSearchParam = removeAccents(rawSearch.toLocaleLowerCase());
 
-  let whereCondition: Filterable["where"] = {
-    [Op.or]: [
-      // busca por nome sem acento (cobre emoji pois removeAccents não os remove)
-      {
-        name: Sequelize.where(
-          Sequelize.fn("LOWER", Sequelize.col("Contact.name")),
-          "LIKE",
-          `%${sanitizedSearchParam}%`
+  // Build conditions array to avoid [Op.or] key collision
+  const andConditions: any[] = [
+    { companyId },
+    // Oculta contatos LID (identificadores internos do WhatsApp sem número real).
+    // Grupos são sempre incluídos; números válidos BR têm no máximo 13 dígitos.
+    {
+      [Op.or]: [
+        { isGroup: true },
+        Sequelize.where(
+          Sequelize.fn("length", Sequelize.col("Contact.number")),
+          { [Op.lte]: 13 }
         )
-      },
-      // busca por nome original (cobre emoji que removeAccents poderia suprimir)
-      {
-        name: { [Op.iLike]: `%${rawSearch}%` }
-      },
-      { number: { [Op.like]: `%${rawSearch}%` } },
-      { email: { [Op.iLike]: `%${rawSearch}%` } }
-    ]
-  };
+      ]
+    }
+  ];
 
-  whereCondition = {
-    ...whereCondition,
-    companyId
-  };
+  if (rawSearch) {
+    andConditions.push({
+      [Op.or]: [
+        {
+          name: Sequelize.where(
+            Sequelize.fn("LOWER", Sequelize.col("Contact.name")),
+            "LIKE",
+            `%${sanitizedSearchParam}%`
+          )
+        },
+        { name: { [Op.iLike]: `%${rawSearch}%` } },
+        { number: { [Op.like]: `%${rawSearch}%` } },
+        { email: { [Op.iLike]: `%${rawSearch}%` } }
+      ]
+    });
+  }
 
   if (Array.isArray(tagsIds) && tagsIds.length > 0) {
-    const contactTagFilter: any[] | null = [];
     const contactTags = await ContactTag.findAll({
       where: { tagId: { [Op.in]: tagsIds } }
     });
-    if (contactTags) {
-      contactTagFilter.push(contactTags.map(t => t.contactId));
-    }
-
+    const contactTagFilter: number[][] = [contactTags.map(t => t.contactId)];
     const contactTagsIntersection: number[] = intersection(...contactTagFilter);
-
-    whereCondition = {
-      ...whereCondition,
-      id: {
-        [Op.in]: contactTagsIntersection
-      }
-    };
+    andConditions.push({ id: { [Op.in]: contactTagsIntersection } });
   }
 
   if (isGroup === "false") {
-    whereCondition = {
-      ...whereCondition,
-      isGroup: false
-    };
+    andConditions.push({ isGroup: false });
   }
 
   if (channel && channel !== "") {
-    whereCondition = {
-      ...whereCondition,
-      channel
-    };
+    andConditions.push({ channel });
   }
 
   if (active !== undefined && active !== "") {
-    whereCondition = {
-      ...whereCondition,
-      active: active === "true"
-    };
+    andConditions.push({ active: active === "true" });
   }
 
-  // Oculta contatos LID (identificadores internos do WhatsApp sem número real).
-  // Números válidos BR têm no máximo 13 dígitos; LIDs têm 14-16.
-  whereCondition = {
-    ...whereCondition,
-    [Op.or]: [
-      { isGroup: true },
-      Sequelize.where(
-        Sequelize.fn("length", Sequelize.col("Contact.number")),
-        { [Op.lte]: 13 }
-      )
-    ]
-  };
+  const whereCondition: any = { [Op.and]: andConditions };
 
-  const limit = 100;
+  const limit = 250;
   const offset = limit * (+pageNumber - 1);
 
   const { count, rows: contacts } = await Contact.findAndCountAll({
     where: whereCondition,
+    distinct: true,
     limit,
     include: [
       {

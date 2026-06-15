@@ -169,6 +169,7 @@ import VolumeContabil from "../models/VolumeContabil";
 import VolumeDP from "../models/VolumeDP";
 import VolumeFiscal from "../models/VolumeFiscal";
 import WhatsappGroup from "../models/WhatsappGroup";
+import WhatsappStory from "../models/WhatsappStory";
 import dbConfig from "../config/database";
 
 const sequelize = new Sequelize(dbConfig);
@@ -343,6 +344,7 @@ const models = [
   VolumeDP,
   VolumeFiscal,
   WhatsappGroup,
+  WhatsappStory,
 ];
 
 sequelize.addModels(models);
