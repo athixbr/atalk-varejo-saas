@@ -65,6 +65,9 @@ class Announcement extends Model<Announcement> {
   @Column(DataType.DATE)
   expiresAt: Date;
 
+  @Column(DataType.DATE)
+  scheduledAt: Date;
+
   @ForeignKey(() => User)
   @Column
   createdByUserId: number;

@@ -18,7 +18,7 @@ import ListMessagesService from "../services/MessageServices/ListMessagesService
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
-import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
+import SendWhatsAppMessage, { buildVCardText } from "../services/WbotServices/SendWhatsAppMessage";
 import CreateMessageService from "../services/MessageServices/CreateMessageService";
 
 import { sendFacebookMessageMedia } from "../services/FacebookServices/sendFacebookMessageMedia";
@@ -40,6 +40,7 @@ import EditWhatsAppMessage from "../services/MessageServices/EditWhatsAppMessage
 import ListImagesService from "../services/MessageServices/ListImagesService";
 import ListAllMediaService from "../services/MessageServices/ListAllMediaService";
 import SearchMessagesService from "../services/MessageServices/SearchMessagesService";
+import RetryMediaDownloadService from "../services/MessageServices/RetryMediaDownloadService";
 import { getWbot } from "../libs/wbot";
 
 
@@ -130,6 +131,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { body, quotedMsg, isPrivate, vCard }: MessageData = req.body;
   const medias = req.files as Express.Multer.File[];
   const { companyId } = req.user;
+  const messageBody = !isNil(vCard) ? buildVCardText(vCard) : body;
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
@@ -178,7 +180,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             wid: sentMessage.key.id,
             ticketId: ticket.id,
             contactId: undefined,
-            body,
+            body: messageBody,
             fromMe: true,
             mediaType: !isNil(vCard) ? "contactMessage" : "extendedTextMessage",
             read: true,
@@ -196,7 +198,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             isForwarded: false
           };
 
-          await ticket.update({ lastMessage: body, imported: null });
+          await ticket.update({ lastMessage: messageBody, imported: null });
           await CreateMessageService({ messageData, companyId });
         }
       }
@@ -206,7 +208,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           wid: `PVT${ticket.updatedAt.toString().replace(' ', '')}`,
           ticketId: ticket.id,
           contactId: undefined,
-          body,
+          body: messageBody,
           fromMe: true,
           mediaType: !isNil(vCard) ? 'contactMessage' : 'extendedTextMessage',
           read: true,
@@ -710,6 +712,26 @@ export const redownloadMedia = async (req: Request, res: Response): Promise<Resp
   fs.writeFileSync(filePath, buffer as Buffer);
 
   return res.json({ status: "recovered", mediaUrl: message.mediaUrl });
+};
+
+export const retryMediaDownload = async (req: Request, res: Response): Promise<Response> => {
+  const { messageId } = req.params;
+  const { companyId } = req.user;
+
+  const { ticket, message } = await RetryMediaDownloadService({ messageId, companyId });
+
+  const io = getIO();
+  io.to(String(ticket.id))
+    .to(ticket.status)
+    .to("notification")
+    .emit(`company-${companyId}-appMessage`, {
+      action: "update",
+      message,
+      ticket,
+      contact: ticket.contact
+    });
+
+  return res.json({ message });
 };
 
 export const searchMessages = async (req: Request, res: Response): Promise<Response> => {

@@ -11,6 +11,7 @@ import {
   DataType
 } from "sequelize-typescript";
 import Checklist from "./Checklist";
+import { isSpacesUrl, getSignedMediaUrl } from "../helpers/uploadToSpaces";
 
 @Table({ tableName: "ChecklistItens" })
 class ChecklistItem extends Model<ChecklistItem> {
@@ -42,7 +43,17 @@ class ChecklistItem extends Model<ChecklistItem> {
   tipo: string; // 'texto', 'imagem', 'video', 'arquivo'
 
   @Column(DataType.TEXT)
-  arquivoUrl: string;
+  get arquivoUrl(): string | null {
+    const raw = this.getDataValue("arquivoUrl");
+    if (!raw) return null;
+    const path = this.getDataValue("arquivoPath");
+    // Bucket é privado — se o valor salvo é uma URL de storage (não local),
+    // gera uma URL assinada temporária a partir da key (arquivoPath) a cada leitura.
+    if (path && isSpacesUrl(raw)) {
+      return getSignedMediaUrl(path);
+    }
+    return raw;
+  }
 
   @Column
   arquivoNome: string;

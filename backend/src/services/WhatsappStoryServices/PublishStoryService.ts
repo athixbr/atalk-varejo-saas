@@ -44,10 +44,10 @@ const PublishStoryService = async (params: PublishStoryParams): Promise<Whatsapp
 
   let mediaUrl: string | undefined;
   let mediaPath: string | undefined;
+  const doService = DigitalOceanService;
 
-  // Upload de mídia para o DO Spaces se houver arquivo
+  // Upload de mídia para o Spaces/B2 se houver arquivo
   if (mediaBuffer && mediaFileName) {
-    const doService = new DigitalOceanService();
     const uploaded = await doService.upload({
       companyId,
       folder: "stories",
@@ -70,7 +70,8 @@ const PublishStoryService = async (params: PublishStoryParams): Promise<Whatsapp
     payload.text = textContent;
     payload.backgroundColor = backgroundColor;
   } else {
-    payload.mediaUrl = mediaUrl;
+    // Bucket é privado — o Baileys precisa de uma URL assinada para conseguir baixar a mídia.
+    payload.mediaUrl = mediaPath ? doService.getSignedUrl(mediaPath, 300) : mediaUrl;
     payload.caption = caption;
     payload.mimeType = mediaMimeType;
   }

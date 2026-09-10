@@ -6,7 +6,6 @@ import Queue from "../../models/Queue";
 import Company from "../../models/Company";
 import User from "../../models/User";
 import Plan from "../../models/Plan";
-import Ticket from "../../models/Ticket";
 
 interface Request {
   searchParam?: string;
@@ -50,6 +49,7 @@ const ListUsersService = async ({
     //attributes: ["name", "id", "email", "companyId", "profile", "createdAt", "online", "startWork", "endWork", "farewellMessage","allTicket"],
     limit,
     offset,
+    distinct: true,
     order: [["createdAt", "DESC"]],
     include: [
       { model: Queue, as: "queues", attributes: ["id", "name", "color"] },
@@ -72,8 +72,7 @@ const ListUsersService = async ({
               "useExternalApi"]
           },
         ]
-      },
-      { model: Ticket, as: "tickets"}
+      }
     ]
   });
 

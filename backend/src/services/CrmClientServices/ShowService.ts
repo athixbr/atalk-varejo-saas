@@ -2,8 +2,6 @@ import CrmClient from "../../models/CrmClient";
 import User from "../../models/User";
 import CrmBusinessType from "../../models/CrmBusinessType";
 import CrmTaxRegime from "../../models/CrmTaxRegime";
-import CrmTask from "../../models/CrmTask";
-import CrmInteraction from "../../models/CrmInteraction";
 import AppError from "../../errors/AppError";
 
 const ShowService = async (
@@ -15,22 +13,7 @@ const ShowService = async (
     include: [
       { model: User, as: "user", attributes: ["id", "name"] },
       { model: CrmBusinessType, as: "businessType", attributes: ["id", "name"] },
-      { model: CrmTaxRegime, as: "taxRegime", attributes: ["id", "name"] },
-      {
-        model: CrmTask,
-        as: "tasks",
-        include: [
-          { model: User, as: "user", attributes: ["id", "name"] }
-        ]
-      },
-      {
-        model: CrmInteraction,
-        as: "interactions",
-        include: [
-          { model: User, as: "user", attributes: ["id", "name"] }
-        ],
-        order: [["date", "DESC"]]
-      }
+      { model: CrmTaxRegime, as: "taxRegime", attributes: ["id", "name"] }
     ]
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext, useCallback, useRef } from "react";
+import React, { useState, useEffect, useReducer, useContext, useCallback } from "react";
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
 
@@ -89,8 +89,6 @@ const Users = () => {
   const history = useHistory();
 
   const [loading, setLoading] = useState(false);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -99,33 +97,36 @@ const Users = () => {
   const [users, dispatch] = useReducer(reducer, []);
   const { user: loggedInUser } = useContext(AuthContext)
   const { profileImage } = loggedInUser;
-  const scrollTimeoutRef = useRef(null);
 
   useEffect(() => {
     dispatch({ type: "RESET" });
-    setPageNumber(1);
-  }, [searchParam]);
-
-  useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
-      const fetchUsers = async () => {
+      const fetchAllUsers = async () => {
         try {
-          const { data } = await api.get("/users/", {
-            params: { searchParam, pageNumber },
-          });
-          
-          dispatch({ type: "LOAD_USERS", payload: data.users });
-          setHasMore(data.hasMore);
+          let pageNumber = 1;
+          let hasMore = true;
+
+          while (hasMore) {
+            const { data } = await api.get("/users/", {
+              params: { searchParam, pageNumber },
+            });
+
+            dispatch({ type: "LOAD_USERS", payload: data.users });
+            hasMore = data.hasMore;
+            pageNumber += 1;
+          }
+
           setLoading(false);
         } catch (err) {
+          setLoading(false);
           toastError(err);
         }
       };
-      fetchUsers();
+      fetchAllUsers();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [searchParam, pageNumber]);
+  }, [searchParam]);
 
   useEffect(() => {
     const companyId = loggedInUser.companyId;
@@ -174,7 +175,6 @@ const Users = () => {
     }
     setDeletingUser(null);
     setSearchParam("");
-    setPageNumber(1);
   };
 
   const handlePerfilCargo = (userId) => {
@@ -184,29 +184,6 @@ const Users = () => {
   const handleHolerites = (userId) => {
     history.push(`/users/holerites/${userId}`);
   };
-
-  const loadMore = useCallback(() => {
-    if (!loading && hasMore) {
-      setPageNumber((prevState) => prevState + 1);
-    }
-  }, [loading, hasMore]);
-
-  const handleScroll = useCallback((e) => {
-    if (!hasMore || loading) return;
-    
-    // Clear previous timeout to debounce scroll events
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-    
-    scrollTimeoutRef.current = setTimeout(() => {
-      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-      // Only trigger when truly at bottom (no threshold to avoid multiple triggers)
-      if (scrollTop + clientHeight >= scrollHeight - 5) {
-        loadMore();
-      }
-    }, 100); // 100ms debounce
-  }, [hasMore, loading, loadMore]);
 
   const renderProfileImage = useCallback((user) => {
     if (user.id === loggedInUser.id ) {
@@ -280,7 +257,6 @@ const Users = () => {
       <Paper
         className={classes.mainPaper}
         variant="outlined"
-        onScroll={handleScroll}
       >
         <Table size="small">
           <TableHead>

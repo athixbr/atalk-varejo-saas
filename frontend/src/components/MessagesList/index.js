@@ -402,7 +402,17 @@ const useStyles = makeStyles((theme) => ({
 
   deletedMessage: {
     color: '#f55d65'
-  }
+  },
+
+  failedMediaNotice: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    color: "#f55d65",
+    fontSize: "0.85rem",
+    marginBottom: 4,
+  },
 }));
 
 const reducer = (state, action) => {
@@ -476,6 +486,7 @@ const MessagesList = ({
   const [pageNumber, setPageNumber] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [retryingMediaId, setRetryingMediaId] = useState(null);
   const lastMessageRef = useRef();
   const firstMatchRef = useRef();
 
@@ -713,6 +724,47 @@ const MessagesList = ({
       setReplyingMessage(message);
     }
   };
+
+  const FAILED_MEDIA_TYPES = [
+    "imageMessage",
+    "videoMessage",
+    "audioMessage",
+    "documentMessage",
+    "documentWithCaptionMessage",
+    "stickerMessage",
+    "ptvMessage",
+  ];
+
+  const isFailedMediaMessage = (message) =>
+    !message.mediaUrl && FAILED_MEDIA_TYPES.includes(message.mediaType);
+
+  const handleRetryMediaDownload = async (message) => {
+    if (retryingMediaId) return;
+    setRetryingMediaId(message.id);
+    try {
+      await api.post(`/messages/retry-media/${message.id}`);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setRetryingMediaId(null);
+    }
+  };
+
+  const renderFailedMediaNotice = (message) => (
+    <div className={classes.failedMediaNotice}>
+      <span>⚠️ Não foi possível baixar esta mídia</span>
+      <Button
+        size="small"
+        variant="outlined"
+        color="inherit"
+        disabled={retryingMediaId === message.id}
+        onClick={() => handleRetryMediaDownload(message)}
+        startIcon={retryingMediaId === message.id ? <CircularProgress size={14} /> : <GetApp />}
+      >
+        {retryingMediaId === message.id ? "Baixando..." : "Tentar baixar novamente"}
+      </Button>
+    </div>
+  );
 
   const checkMessageMedia = (message) => {
     if (message.mediaType === "locationMessage" && message.body.split('|').length >= 2) {
@@ -1142,8 +1194,10 @@ const MessagesList = ({
                 )} */}
 
                     {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage"
-                      //|| message.mediaType === "multi_vcard" 
+                      //|| message.mediaType === "multi_vcard"
                     ) && checkMessageMedia(message)}
+
+                    {isFailedMediaMessage(message) && renderFailedMediaNotice(message)}
 
                     <div className={clsx(classes.textContentItem, {
                       [classes.textContentItemDeleted]: message.isDeleted,
@@ -1168,9 +1222,9 @@ const MessagesList = ({
                         </div>
                       )}
 
-                      {(message.mediaType === "image" && path.basename(message.mediaUrl) === message.body) || (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage") && (
+                      {!isFailedMediaMessage(message) && ((message.mediaType === "image" && path.basename(message.mediaUrl) === message.body) || (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage") && (
                         <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " : formatMentions(message.body)}</MarkdownWrapper>
-                      )}
+                      ))}
 
                       {message.quotedMsg && message.mediaType === "reactionMessage" && (
                         <>
@@ -1247,8 +1301,10 @@ const MessagesList = ({
                   </div>
                 )}
                 {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage"
-                  //|| message.mediaType === "multi_vcard" 
+                  //|| message.mediaType === "multi_vcard"
                 ) && checkMessageMedia(message)}
+
+                {isFailedMediaMessage(message) && renderFailedMediaNotice(message)}
                 <div
                   className={clsx(classes.textContentItem, {
                     [classes.textContentItemDeleted]: message.isDeleted,
@@ -1279,9 +1335,9 @@ const MessagesList = ({
                     </div>
                   )}
 
-                  {(message.mediaType === "image" && path.basename(message.mediaUrl) === message.body) || (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage") && (
+                  {!isFailedMediaMessage(message) && ((message.mediaType === "image" && path.basename(message.mediaUrl) === message.body) || (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage") && (
                     <MarkdownWrapper>{formatMentions(message.body)}</MarkdownWrapper>
-                  )}
+                  ))}
 
                   {message.quotedMsg && message.mediaType === "reactionMessage" && (
                     <>

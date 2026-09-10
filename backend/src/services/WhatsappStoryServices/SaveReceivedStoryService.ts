@@ -48,7 +48,7 @@ const SaveReceivedStoryService = async (params: SaveReceivedStoryParams): Promis
   // Faz upload da mídia recebida para o DO Spaces
   if (mediaBuffer && mediaFileName) {
     try {
-      const doService = new DigitalOceanService();
+      const doService = DigitalOceanService;
       const uploaded = await doService.upload({
         companyId,
         folder: "stories",

@@ -118,7 +118,15 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
         const { id, name, provider } = whatsappUpdate;
 
-        const { version, isLatest } = await fetchLatestBaileysVersion();
+        // fetchLatestBaileysVersion busca a versão em raw.githubusercontent.com; se essa
+        // rota estiver indisponível (foi o caso em 2026-08-17), o fetch trava por minutos
+        // sem timeout próprio. Damos um prazo curto e caímos no default embutido do pacote.
+        const { version, isLatest } = await Promise.race([
+          fetchLatestBaileysVersion(),
+          new Promise<{ version: number[]; isLatest: boolean }>(res =>
+            setTimeout(() => res({ version: [2, 3000, 1043857760], isLatest: false }), 5000)
+          )
+        ]);
 
         logger.info(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
         logger.info(`Starting session ${name}`);

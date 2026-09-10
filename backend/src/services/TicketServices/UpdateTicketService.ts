@@ -144,8 +144,12 @@ const UpdateTicketService = async ({
           let bodyRatingMessage = `\u200e${ratingTxt}\n`;
 
           if (ticket.channel === "whatsapp") {
-            const msg = await SendWhatsAppMessage({ body: bodyRatingMessage, ticket, isForwarded: false, isPrivate: false });
-            await verifyMessage(msg, ticket, ticket.contact);
+            try {
+              const msg = await SendWhatsAppMessage({ body: bodyRatingMessage, ticket, isForwarded: false, isPrivate: false });
+              await verifyMessage(msg, ticket, ticket.contact);
+            } catch (sendErr) {
+              Sentry.captureException(sendErr);
+            }
           }
 
           if (["facebook", "instagram"].includes(ticket.channel)) {
@@ -220,10 +224,12 @@ const UpdateTicketService = async ({
             body = `\u200e${complationMessage}`;
           }
           if (ticket.channel === "whatsapp" && (!ticket.isGroup || groupAsTicket === "enabled")) {
-            const sentMessage = await SendWhatsAppMessage({ body, ticket, isForwarded: false, isPrivate: false });
-
-            await verifyMessage(sentMessage, ticket, ticket.contact);
-
+            try {
+              const sentMessage = await SendWhatsAppMessage({ body, ticket, isForwarded: false, isPrivate: false });
+              await verifyMessage(sentMessage, ticket, ticket.contact);
+            } catch (sendErr) {
+              Sentry.captureException(sendErr);
+            }
           }
 
           if (["facebook", "instagram"].includes(ticket.channel) && (!ticket.isGroup || groupAsTicket === "enabled")) {

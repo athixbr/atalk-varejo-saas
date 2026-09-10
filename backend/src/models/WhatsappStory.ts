@@ -14,6 +14,7 @@ import {
 } from "sequelize-typescript";
 import Company from "./Company";
 import Whatsapp from "./Whatsapp";
+import { isSpacesUrl, getSignedMediaUrl } from "../helpers/uploadToSpaces";
 
 @Table({ tableName: "WhatsappStories" })
 class WhatsappStory extends Model<WhatsappStory> {
@@ -65,7 +66,17 @@ class WhatsappStory extends Model<WhatsappStory> {
 
   @AllowNull(true)
   @Column(DataType.TEXT)
-  mediaUrl: string;
+  get mediaUrl(): string | null {
+    const raw = this.getDataValue("mediaUrl");
+    if (!raw) return null;
+    const path = this.getDataValue("mediaPath");
+    // Bucket é privado — se o valor salvo é uma URL de storage (não local),
+    // gera uma URL assinada temporária a partir da key (mediaPath) a cada leitura.
+    if (path && isSpacesUrl(raw)) {
+      return getSignedMediaUrl(path);
+    }
+    return raw;
+  }
 
   @AllowNull(true)
   @Column

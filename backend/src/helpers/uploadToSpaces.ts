@@ -31,8 +31,7 @@ export async function uploadBufferToSpaces(
     Bucket: BUCKET,
     Key: key,
     Body: buffer,
-    ContentType: contentType,
-    ACL: "public-read"
+    ContentType: contentType
   }).promise();
   const cdnUrl = buildCdnUrl(key);
   logger.info(`[Spaces] ✅ Enviado: ${key} → ${cdnUrl}`);
@@ -79,6 +78,34 @@ export function isSpacesUrl(value: string): boolean {
 }
 
 /**
+ * Extrai a key S3 a partir de QUALQUER URL http(s) (independente do domínio/CDN
+ * usado no momento em que foi salva — necessário porque registros antigos guardam
+ * a URL do provedor anterior, ex: DO Spaces, enquanto o CDN atual é outro).
+ * Ex: "https://qualquer-dominio.com/company2/file%23.jpg" => "company2/file#.jpg"
+ */
+export function extractKeyFromUrl(url: string): string {
+  const doubleSlash = url.indexOf("//");
+  const pathStart = url.indexOf("/", doubleSlash + 2);
+  let rawPath = pathStart === -1 ? "" : url.substring(pathStart + 1);
+  // Remove querystring (ex: assinatura de URL temporária ?X-Amz-...) que não faz parte da key real.
+  const queryStart = rawPath.indexOf("?");
+  if (queryStart !== -1) rawPath = rawPath.substring(0, queryStart);
+  return decodeURIComponent(rawPath);
+}
+
+/**
+ * Gera uma URL assinada (temporária) para leitura de um arquivo privado no bucket.
+ * getSignedUrl é síncrono no aws-sdk v2 (apenas assina localmente, sem chamada de rede).
+ */
+export function getSignedMediaUrl(key: string, expiresIn: number = 3600): string {
+  return s3.getSignedUrl("getObject", {
+    Bucket: BUCKET,
+    Key: key,
+    Expires: expiresIn
+  });
+}
+
+/**
  * Baixa um arquivo do DO Spaces e retorna o Buffer.
  */
 export async function downloadFromSpaces(key: string): Promise<Buffer> {
@@ -93,8 +120,7 @@ export async function downloadFromSpaces(key: string): Promise<Buffer> {
  * Ex: "https://atalk.atl1.cdn.digitaloceanspaces.com/company2/file%23.jpg" => "company2/file#.jpg"
  */
 export function cdnUrlToKey(cdnUrl: string): string {
-  const encoded = cdnUrl.replace(`${CDN}/`, "");
-  return decodeURIComponent(encoded);
+  return extractKeyFromUrl(cdnUrl);
 }
 
 /**

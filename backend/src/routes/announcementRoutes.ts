@@ -5,18 +5,20 @@ import * as AnnouncementController from "../controllers/AnnouncementController";
 import multer from "multer";
 import uploadConfig from "../config/upload";
 
-const upload = multer(uploadConfig);
+// Sem limite de tamanho para suportar qualquer arquivo (imagem, vídeo, PDF etc.)
+const upload = multer({ ...uploadConfig, limits: undefined });
 
 const routes = express.Router();
 
 routes.get("/announcements/list", isAuth, AnnouncementController.findList);
 routes.get("/announcements/admin/notifications", isAuth, AnnouncementController.adminNotifications);
+routes.get("/announcements/admin/list", isAuth, AnnouncementController.adminList);
 routes.get("/announcements", isAuth, AnnouncementController.index);
 routes.patch("/announcements/:id/dismiss", isAuth, AnnouncementController.dismiss);
 routes.patch("/announcements/:id/read", isAuth, AnnouncementController.markRead);
 routes.get("/announcements/:id", isAuth, AnnouncementController.show);
-routes.post("/announcements", isAuth, AnnouncementController.store);
-routes.put("/announcements/:id", isAuth,  upload.array("file"), AnnouncementController.update);
+routes.post("/announcements", isAuth, upload.array("file"), AnnouncementController.store);
+routes.put("/announcements/:id", isAuth, upload.array("file"), AnnouncementController.update);
 routes.delete("/announcements/:id", isAuth, AnnouncementController.remove);
 routes.post("/announcements/:id/media-upload", isAuth, upload.array("file"), AnnouncementController.mediaUpload);
 routes.delete("/announcements/:id/media-upload", isAuth, AnnouncementController.deleteMedia);

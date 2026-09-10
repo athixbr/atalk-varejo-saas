@@ -15,7 +15,6 @@ const FindAdminNotificationsService = async (
 ): Promise<Announcement[]> => {
   const { userId, companyId } = params;
 
-  // Buscar departamentos do usuário via tabela de relacionamento
   let userDepartmentIds: number[] = [];
   try {
     const userDepts = await DepartamentoUsuario.findAll({
@@ -30,11 +29,9 @@ const FindAdminNotificationsService = async (
   const now = new Date();
   const safeUserId = Number(userId);
 
-  // usuariosIds e departamentosIds são integer[] no banco, usar operadores de array do PostgreSQL
   const userDeptConditions: any[] = [
-    Sequelize.literal(
-      `${safeUserId} = ANY("Announcement"."usuariosIds")`
-    )
+    Sequelize.literal(`0 = ANY("Announcement"."usuariosIds")`),
+    Sequelize.literal(`${safeUserId} = ANY("Announcement"."usuariosIds")`)
   ];
 
   if (userDepartmentIds.length > 0) {
@@ -57,6 +54,13 @@ const FindAdminNotificationsService = async (
             { expiresAt: { [Op.is]: null } },
             { expiresAt: { [Op.gt]: now } }
           ]
+        } as any,
+        // Só mostrar se scheduledAt já passou ou é nulo
+        {
+          [Op.or]: [
+            { scheduledAt: { [Op.is]: null } },
+            { scheduledAt: { [Op.lte]: now } }
+          ]
         } as any
       ]
     },
@@ -75,10 +79,15 @@ const FindAdminNotificationsService = async (
     order: [["createdAt", "DESC"]]
   });
 
-  // Filtrar notificações já dispensadas pelo usuário
+  // Filtrar notificações já dispensadas OU já lidas pelo usuário
   return notifications.filter((notification) => {
     const dismissedByUsers = (notification as any).dismissedByUsers || [];
-    return !dismissedByUsers.some((item: any) => item.userId === userId);
+    const readByUsers = (notification as any).readByUsers || [];
+
+    const dismissed = dismissedByUsers.some((item: any) => item.userId === userId);
+    const read = readByUsers.some((item: any) => item.userId === userId);
+
+    return !dismissed && !read;
   });
 };
 

@@ -19,6 +19,7 @@ interface MessageResult {
   mediaType: string | null;
   createdAt: Date;
   ticketId: number;
+  ticketUUID: string;
   ticketStatus: string;
   contactId: number;
   contactName: string;
@@ -117,6 +118,7 @@ const SearchMessagesService = async ({
     mediaType: msg.mediaType,
     createdAt: msg.createdAt,
     ticketId: msg.ticketId,
+    ticketUUID: (msg as any).ticket?.uuid ?? "",
     ticketStatus: (msg as any).ticket?.status ?? "",
     contactId: (msg as any).ticket?.contact?.id ?? null,
     contactName: (msg as any).ticket?.contact?.name ?? "",

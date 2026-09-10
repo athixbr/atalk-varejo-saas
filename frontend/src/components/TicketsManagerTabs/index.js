@@ -1,10 +1,10 @@
-import React, {  useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 import SearchIcon from "@material-ui/icons/Search";
-import { Add, Clear, ClearAllRounded, DoneAll, Facebook, Group, Instagram, OfflineBolt, WhatsApp } from "@material-ui/icons";
+import { Add, Clear, ClearAllRounded, DoneAll, Facebook, Group, Instagram, OfflineBolt, WhatsApp, CallMerge, Close } from "@material-ui/icons";
 import InputBase from "@material-ui/core/InputBase";
 import Tabs from "@material-ui/core/Tabs";
 import Tab from "@material-ui/core/Tab";
@@ -37,7 +37,8 @@ import { UsersFilter } from "../UsersFilter";
 import { StatusFilter } from "../StatusFilter";
 import { WhatsappsFilter } from "../WhatsappsFilter";
 import api from "../../services/api";
-import { Button, Snackbar } from "@material-ui/core";
+import { Button, Snackbar, TextField, Tooltip, Chip } from "@material-ui/core";
+import Autocomplete from "@material-ui/lab/Autocomplete";
 import { SpeedDial, SpeedDialAction } from "@mui/material";
 import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelectedContext";
 
@@ -164,6 +165,25 @@ const useStyles = makeStyles((theme) => ({
     bottom: theme.spacing(1),
     right: theme.spacing(1),
   },
+  mergeBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 12px",
+    background: "linear-gradient(90deg, #e3f2fd 0%, #fce4ec 100%)",
+    borderBottom: "2px solid #90caf9",
+    flexShrink: 0,
+    flexWrap: "wrap",
+  },
+  mergeBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#1565c0",
+    fontWeight: 600,
+  },
+  mergeModeButton: {
+    padding: 6,
+  },
 }));
 
 const TicketsManagerTabs = () => {
@@ -198,11 +218,25 @@ const TicketsManagerTabs = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [selectedForMerge, setSelectedForMerge] = useState([]);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeMode, setMergeMode] = useState(false);
   const { setSelectedQueuesMessage } = useContext(QueueSelectedContext);
+
+  const [viewAsUser, setViewAsUser] = useState(null);
+  const [usersList, setUsersList] = useState([]);
+
+  // Memoizado para não criar novo array a cada render (evita loop de reset no TicketsListCustom)
+  const viewAsUsersFilter = useMemo(
+    () => viewAsUser ? [viewAsUser.id] : undefined,
+    [viewAsUser]
+  );
 
   useEffect(() => {
     if (user.profile.toUpperCase() === "ADMIN") {
       setShowAllTickets(true);
+      api.get("/users/list").then(({ data }) => {
+        const list = data.users || data;
+        if (Array.isArray(list)) setUsersList(list.map(u => ({ id: u.id, name: u.name })));
+      }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -357,6 +391,7 @@ const TicketsManagerTabs = () => {
   };
 
   const handleMergeSelect = (ticket) => {
+    if (!mergeMode) setMergeMode(true);
     setSelectedForMerge(prev => {
       const already = prev.some(t => t.id === ticket.id);
       if (already) return prev.filter(t => t.id !== ticket.id);
@@ -368,9 +403,15 @@ const TicketsManagerTabs = () => {
     });
   };
 
+  const handleCancelMergeMode = () => {
+    setMergeMode(false);
+    setSelectedForMerge([]);
+  };
+
   const handleMergeSuccess = () => {
     setSelectedForMerge([]);
     setMergeModalOpen(false);
+    setMergeMode(false);
   };
 
   const handleCloseOrOpenTicket = ticket => {
@@ -544,6 +585,31 @@ const TicketsManagerTabs = () => {
             )}
           />
         </>
+        {profile === "admin" && (
+          <Autocomplete
+            size="small"
+            style={{ minWidth: 160, flex: 1, maxWidth: 200, margin: "0 6px" }}
+            options={usersList}
+            value={viewAsUser}
+            onChange={(e, v) => setViewAsUser(v)}
+            getOptionLabel={(o) => o.name}
+            getOptionSelected={(o, v) => o.id === v.id}
+            clearOnBlur={false}
+            blurOnSelect={false}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                placeholder="Atendente..."
+                size="small"
+                InputProps={{
+                  ...params.InputProps,
+                  style: { fontSize: 12, padding: "1px 4px" },
+                }}
+              />
+            )}
+          />
+        )}
         <TicketsQueueSelect
           style={{ marginLeft: 6 }}
           selectedQueueIds={selectedQueueIds}
@@ -553,6 +619,16 @@ const TicketsManagerTabs = () => {
             //history.push("/tickets");
           }}
         />
+        <Tooltip title={mergeMode ? "Cancelar modo agrupar" : "Ativar modo agrupar tickets"}>
+          <IconButton
+            size="small"
+            className={classes.mergeModeButton}
+            onClick={mergeMode ? handleCancelMergeMode : () => setMergeMode(true)}
+            style={{ color: mergeMode ? "#1976d2" : "grey", marginLeft: 4 }}
+          >
+            <CallMerge fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Paper>
       <TabPanel
         value={tab}
@@ -673,44 +749,73 @@ const TicketsManagerTabs = () => {
           />
         </Tabs>
 
+        {mergeMode && (
+          <div className={classes.mergeBanner}>
+            <CallMerge style={{ color: "#1976d2", fontSize: 20 }} />
+            <span className={classes.mergeBannerText}>
+              {selectedForMerge.length === 0
+                ? "Modo agrupar ativo — clique no 1º ticket"
+                : `1 ticket selecionado — clique no 2º ticket para agrupar`}
+            </span>
+            <Chip
+              label={`${selectedForMerge.length}/2`}
+              size="small"
+              color="primary"
+              style={{ fontWeight: 700, fontSize: 12 }}
+            />
+            <Tooltip title="Cancelar modo agrupar">
+              <IconButton size="small" onClick={handleCancelMergeMode} style={{ padding: 4 }}>
+                <Close fontSize="small" style={{ color: "#1565c0" }} />
+              </IconButton>
+            </Tooltip>
+          </div>
+        )}
+
         <Paper className={classes.ticketsWrapper}>
           <TicketsList
             status="open"
-            showAll={showAllTickets}
+            showAll={viewAsUsersFilter ? true : showAllTickets}
             selectedQueueIds={selectedQueueIds}
             updateCount={(val) => setOpenCount(val)}
             style={applyPanelStyle("open")}
             forceSearch={forceSearch}
             selectedForMerge={selectedForMerge}
             onMergeSelect={handleMergeSelect}
+            mergeMode={mergeMode}
+            users={viewAsUsersFilter}
           />
           <TicketsList
             status="pending"
             selectedQueueIds={selectedQueueIds}
-            showAll={user.profile === "admin" ? showAllTickets : false}
+            showAll={viewAsUser ? true : (user.profile === "admin" ? showAllTickets : false)}
             updateCount={(val) => setPendingCount(val)}
             style={applyPanelStyle("pending")}
             forceSearch={forceSearch}
             selectedForMerge={selectedForMerge}
             onMergeSelect={handleMergeSelect}
+            mergeMode={mergeMode}
+            users={viewAsUsersFilter}
           />
           <TicketsList
             status="group"
-            showAll={showAllTickets}
+            showAll={viewAsUsersFilter ? true : showAllTickets}
             selectedQueueIds={selectedQueueIds}
             updateCount={(val) => setGroupingCount(val)}
             style={applyPanelStyle("group")}
             forceSearch={forceSearch}
             selectedForMerge={selectedForMerge}
             onMergeSelect={handleMergeSelect}
+            mergeMode={mergeMode}
+            users={viewAsUsersFilter}
           />
         </Paper>
       </TabPanel>
       <TabPanel value={tab} name="closed" className={classes.ticketsWrapper}>
         <TicketsList
           status="closed"
-          showAll={showAllTickets}
+          showAll={viewAsUsersFilter ? true : showAllTickets}
           selectedQueueIds={selectedQueueIds}
+          users={viewAsUsersFilter}
         // handleChangeTab={handleChangeTabOpen}
         />
       </TabPanel>

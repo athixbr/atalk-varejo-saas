@@ -20,6 +20,7 @@ import Company from "./Company";
 import Schedule from "./Schedule";
 import ContactTag from "./ContactTag";
 import Tag from "./Tag";
+import { getSignedMediaUrl } from "../helpers/uploadToSpaces";
 
 @Table
 class Contact extends Model<Contact> {
@@ -115,7 +116,8 @@ class Contact extends Model<Contact> {
     }
     const cdn = process.env.DO_SPACES_CDN;
     if (cdn) {
-      return `${cdn}/company${this.companyId}/contacts/${filename}`;
+      // Bucket é privado — gera uma URL assinada temporária a cada leitura.
+      return getSignedMediaUrl(`company${this.companyId}/contacts/${filename}`);
     }
     return `${process.env.BACKEND_URL}${process.env.PROXY_PORT ? `:${process.env.PROXY_PORT}` : ""}/public/company${this.companyId}/contacts/${filename}`;
   }

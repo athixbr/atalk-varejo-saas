@@ -36,7 +36,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     body,
     sendAt,
     contactId,
-    userId
+    userId,
+    mediaUrl,
+    mediaType,
   } = req.body;
   const { companyId } = req.user;
 
@@ -45,7 +47,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     sendAt,
     contactId,
     companyId,
-    userId
+    userId,
+    mediaUrl,
+    mediaType,
   });
 
   schedule = await ShowService(schedule.id, companyId)
@@ -107,4 +111,19 @@ export const remove = async (
   });
 
   return res.status(200).json({ message: "Schedule deleted" });
+};
+
+export const uploadMedia = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const files = req.files as Express.Multer.File[];
+
+  if (!files || files.length === 0) {
+    throw new AppError("ERR_NO_FILE_SENT", 400);
+  }
+
+  const file = files[0];
+  const mediaType = file.mimetype.split("/")[0]; // image, video, audio, application
+  const relativePath = `/public/company${companyId}/schedules/${file.filename}`;
+
+  return res.status(200).json({ mediaUrl: relativePath, mediaType, filename: file.originalname });
 };

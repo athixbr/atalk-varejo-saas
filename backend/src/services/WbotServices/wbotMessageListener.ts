@@ -474,7 +474,7 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   }
 };
 
-const getMineType = (msg: proto.IWebMessageInfo): IMineTypeMessage => {
+export const getMineType = (msg: proto.IWebMessageInfo): IMineTypeMessage => {
   const mineType =
     msg.message?.imageMessage ||
     msg.message?.audioMessage ||
@@ -487,29 +487,53 @@ const getMineType = (msg: proto.IWebMessageInfo): IMineTypeMessage => {
   return mineType;
 }
 
-const getMediaName = (msg: proto.IWebMessageInfo): string => {
+export const getMediaName = (msg: proto.IWebMessageInfo): string => {
   return msg.message?.documentMessage?.fileName ||
     msg.message?.documentWithCaptionMessage?.message?.documentMessage.fileName || "";
 }
 
-const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null) => {
+// Host oficial do CDN de mídia do WhatsApp usado pelo Baileys por padrão.
+// Algumas mensagens (ex.: stickers) chegam com um campo `url` cujo host é
+// inválido (ex.: a.whatsapp.net, web.whatsapp.net), e o Baileys usa esse host
+// para montar a URL de download a partir do directPath, gerando ENOTFOUND.
+// Ver https://github.com/WhiskeySockets/Baileys/issues/1085
+const DEF_MEDIA_HOST = 'mmg.whatsapp.net';
+
+const isMediaHostDnsError = (err: any): boolean =>
+  err?.code === 'ENOTFOUND' || err?.cause?.code === 'ENOTFOUND';
+
+export const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null) => {
 
   let buffer
-  try {
-    buffer = await downloadMediaMessage(
-      msg as any,
-      'buffer',
-      {}
-    )
-  } catch (err) {
+  let lastDownloadError: any = null;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      buffer = await downloadMediaMessage(
+        msg as any,
+        'buffer',
+        isMediaHostDnsError(lastDownloadError) ? { host: DEF_MEDIA_HOST } : {}
+      )
+      break;
+    } catch (err) {
+      lastDownloadError = err;
+      const isLastAttempt = attempt === maxAttempts;
 
-    if (isImported) {
-      console.log("Falha ao fazer o download de uma mensagem importada, provavelmente a mensagem já não esta mais disponível")
-    } else {
-      console.error('Erro ao baixar mídia:', err);
+      if (!isLastAttempt) {
+        // Falhas de rede/DNS ao buscar a mídia no CDN do WhatsApp costumam ser
+        // transitórias; o Baileys só reencaminha sozinho em erros HTTP 410/404.
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        continue;
+      }
+
+      if (isImported) {
+        console.log("Falha ao fazer o download de uma mensagem importada, provavelmente a mensagem já não esta mais disponível")
+      } else {
+        console.error('Erro ao baixar mídia:', err);
+      }
+
+      return null;
     }
-
-    return null;
   }
 
   if (!buffer) {
@@ -711,9 +735,10 @@ export const verifyMediaMessage = async (
 
   try {
     const media = await downloadMedia(msg, ticket?.imported);
-    if (!media && ticket.imported) {
-      const body =
-        "*System:* \nFalha no download da mídia verifique no dispositivo";
+    if (!media) {
+      const body = ticket.imported
+        ? "*System:* \nFalha no download da mídia verifique no dispositivo"
+        : "*System:* \nFalha no download da mídia (indisponível no servidor do WhatsApp)";
       const messageData = {
         //mensagem de texto
         wid: msg.key.id,
@@ -743,10 +768,6 @@ export const verifyMediaMessage = async (
       });
       logger.error(Error("ERR_WAPP_DOWNLOAD_MEDIA"));
       return CreateMessageService({ messageData, companyId: companyId });
-    }
-
-    if (!media) {
-      throw new Error("ERR_WAPP_DOWNLOAD_MEDIA");
     }
 
     if (!media.data) {

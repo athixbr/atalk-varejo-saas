@@ -11,6 +11,8 @@ import {
   Chip
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
+import PictureAsPdfIcon from "@material-ui/icons/PictureAsPdf";
+import AttachFileIcon from "@material-ui/icons/AttachFile";
 import moment from "moment";
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -28,7 +30,7 @@ const useStyles = makeStyles((theme) => ({
     marginTop: theme.spacing(2),
     marginBottom: theme.spacing(2),
     minHeight: 200,
-    maxHeight: 400,
+    maxHeight: 500,
     overflow: "auto"
   },
   messageText: {
@@ -60,8 +62,116 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "center",
     alignItems: "center",
     minHeight: 200
+  },
+  mediaContainer: {
+    marginBottom: theme.spacing(2),
+    textAlign: "center",
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: 4,
+    overflow: "hidden"
+  },
+  pdfLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(1.5),
+    color: theme.palette.primary.main,
+    textDecoration: "none",
+    justifyContent: "center",
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover
+    }
+  },
+  fileLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    padding: theme.spacing(1.5),
+    color: theme.palette.primary.main,
+    textDecoration: "none",
+    justifyContent: "center",
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover
+    }
   }
 }));
+
+const getMediaType = (mediaPath, mediaName) => {
+  const url = mediaPath || "";
+  const name = (mediaName || url).toLowerCase();
+
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url) || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(name)) {
+    return "image";
+  }
+  if (/\.(mp4|webm|ogg|mov|avi|mkv)(\?|$)/i.test(url) || /\.(mp4|webm|ogg|mov|avi|mkv)$/.test(name)) {
+    return "video";
+  }
+  if (/\.(mp3|wav|ogg|aac|flac)(\?|$)/i.test(url) || /\.(mp3|wav|ogg|aac|flac)$/.test(name)) {
+    return "audio";
+  }
+  if (/\.pdf(\?|$)/i.test(url) || /\.pdf$/.test(name)) {
+    return "pdf";
+  }
+  return "file";
+};
+
+const MediaRenderer = ({ mediaPath, mediaName }) => {
+  const classes = useStyles();
+  const type = getMediaType(mediaPath, mediaName);
+  const displayName = mediaName || "Arquivo";
+
+  if (type === "image") {
+    return (
+      <Box className={classes.mediaContainer}>
+        <img
+          src={mediaPath}
+          alt="Notificação"
+          style={{ maxWidth: "100%", maxHeight: 350, objectFit: "contain", display: "block", margin: "0 auto" }}
+        />
+      </Box>
+    );
+  }
+
+  if (type === "video") {
+    return (
+      <Box className={classes.mediaContainer}>
+        <video
+          src={mediaPath}
+          controls
+          style={{ maxWidth: "100%", maxHeight: 350 }}
+        />
+      </Box>
+    );
+  }
+
+  if (type === "audio") {
+    return (
+      <Box className={classes.mediaContainer} style={{ padding: 12 }}>
+        <audio src={mediaPath} controls style={{ width: "100%" }} />
+      </Box>
+    );
+  }
+
+  if (type === "pdf") {
+    return (
+      <Box className={classes.mediaContainer}>
+        <a href={mediaPath} target="_blank" rel="noopener noreferrer" className={classes.pdfLink}>
+          <PictureAsPdfIcon color="error" />
+          <Typography variant="body2">{displayName}</Typography>
+        </a>
+      </Box>
+    );
+  }
+
+  return (
+    <Box className={classes.mediaContainer}>
+      <a href={mediaPath} target="_blank" rel="noopener noreferrer" className={classes.fileLink} download={displayName}>
+        <AttachFileIcon />
+        <Typography variant="body2">{displayName}</Typography>
+      </a>
+    </Box>
+  );
+};
 
 const AdminNotificationModal = () => {
   const classes = useStyles();
@@ -74,7 +184,6 @@ const AdminNotificationModal = () => {
   useEffect(() => {
     loadNotifications();
 
-    // Setup socket para receber notificações em tempo real
     if (user?.companyId) {
       const socket = socketConnection({ companyId: user.companyId, userId: user.id });
 
@@ -94,12 +203,11 @@ const AdminNotificationModal = () => {
     try {
       setLoading(true);
       const { data } = await api.get("/announcements/admin/notifications");
-      
-      // Ordenar por mais recente primeiro
-      const sorted = Array.isArray(data) 
+
+      const sorted = Array.isArray(data)
         ? data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         : [];
-      
+
       setNotifications(sorted);
       setCurrentIndex(0);
     } catch (err) {
@@ -111,7 +219,17 @@ const AdminNotificationModal = () => {
   };
 
   const currentNotification = notifications[currentIndex];
-  const isOpen = currentNotification && !loading;
+  const isOpen = !!currentNotification && !loading;
+
+  const removeCurrentAndAdvance = () => {
+    setNotifications((prev) => {
+      const updated = prev.filter((_, idx) => idx !== currentIndex);
+      if (currentIndex >= updated.length && updated.length > 0) {
+        setCurrentIndex(updated.length - 1);
+      }
+      return updated;
+    });
+  };
 
   const handleDismiss = async () => {
     if (!currentNotification) return;
@@ -119,13 +237,7 @@ const AdminNotificationModal = () => {
     try {
       setActionLoading(true);
       await api.patch(`/announcements/${currentNotification.id}/dismiss`);
-      
-      const newNotifications = notifications.filter((_, idx) => idx !== currentIndex);
-      setNotifications(newNotifications);
-      
-      if (currentIndex >= newNotifications.length) {
-        setCurrentIndex(Math.max(0, newNotifications.length - 1));
-      }
+      removeCurrentAndAdvance();
     } catch (err) {
       toastError(err);
     } finally {
@@ -139,13 +251,7 @@ const AdminNotificationModal = () => {
     try {
       setActionLoading(true);
       await api.patch(`/announcements/${currentNotification.id}/read`);
-      
-      const newNotifications = notifications.filter((_, idx) => idx !== currentIndex);
-      setNotifications(newNotifications);
-      
-      if (currentIndex >= newNotifications.length) {
-        setCurrentIndex(Math.max(0, newNotifications.length - 1));
-      }
+      removeCurrentAndAdvance();
     } catch (err) {
       toastError(err);
     } finally {
@@ -170,11 +276,7 @@ const AdminNotificationModal = () => {
       onClose={handleDismiss}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        style: {
-          borderRadius: "8px"
-        }
-      }}
+      PaperProps={{ style: { borderRadius: "8px" } }}
     >
       <DialogTitle className={classes.dialogTitle}>
         {currentNotification?.title}
@@ -192,25 +294,10 @@ const AdminNotificationModal = () => {
             </Typography>
 
             {currentNotification?.mediaPath && (
-              <Box
-                style={{
-                  marginBottom: "16px",
-                  textAlign: "center",
-                  border: "1px solid #e0e0e0",
-                  borderRadius: "4px",
-                  overflow: "hidden"
-                }}
-              >
-                <img
-                  src={currentNotification.mediaPath}
-                  alt="Notificação"
-                  style={{
-                    maxWidth: "100%",
-                    maxHeight: "300px",
-                    objectFit: "cover"
-                  }}
-                />
-              </Box>
+              <MediaRenderer
+                mediaPath={currentNotification.mediaPath}
+                mediaName={currentNotification.mediaName}
+              />
             )}
 
             <Box className={classes.metaInfo}>
@@ -226,7 +313,7 @@ const AdminNotificationModal = () => {
             </Box>
 
             {notifications.length > 1 && (
-              <Typography variant="caption" color="textSecondary" style={{ marginTop: "8px", display: "block" }}>
+              <Typography variant="caption" color="textSecondary" style={{ marginTop: 8, display: "block" }}>
                 {currentIndex + 1} de {notifications.length} notificações
               </Typography>
             )}
@@ -241,7 +328,7 @@ const AdminNotificationModal = () => {
           disabled={actionLoading}
           className={classes.dismissButton}
         >
-          Fechar/Descartar
+          Fechar
         </Button>
         <Button
           onClick={handleMarkRead}

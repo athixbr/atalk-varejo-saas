@@ -17,19 +17,19 @@ const useStyles = makeStyles(() => ({
   },
 }));
 
-const XmlNfe = () => {
+const SpedFiscal = () => {
   const classes = useStyles();
 
   return (
     <div className={classes.wrapper}>
       <iframe
         className={classes.iframe}
-        src="/xml-contco/"
-        title="XML Cartório"
+        src="/sped/"
+        title="SPED Fiscal"
         allow="clipboard-read; clipboard-write"
       />
     </div>
   );
 };
 
-export default XmlNfe;
+export default SpedFiscal;

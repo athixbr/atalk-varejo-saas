@@ -39,3 +39,6 @@ migrate-progress.json
 # PM2
 ecosystem*.config.cjs
 pm2-*.json
+
+!.env.example
+!**/.env.example

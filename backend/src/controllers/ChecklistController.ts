@@ -155,7 +155,7 @@ export const uploadFile = async (req: Request, res: Response): Promise<Response>
     });
 
     return res.json({
-      url: uploadResult.url,
+      url: DigitalOceanService.getSignedUrl(uploadResult.path),
       path: uploadResult.path,
       nome: req.file.originalname
     });

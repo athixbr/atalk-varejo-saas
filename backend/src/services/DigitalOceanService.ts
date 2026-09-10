@@ -86,7 +86,7 @@ class DigitalOceanService {
       Key: filePath,
       Body: fileBuffer,
       ContentType: mimeType,
-      ACL: isPublic ? "public-read" : "private",
+      ACL: "private",
       Metadata: {
         originalName,
         hash,
@@ -94,6 +94,8 @@ class DigitalOceanService {
       }
     }).promise();
 
+    // Bucket é privado — este valor é só um marcador canônico "está no storage",
+    // não é uma URL acessível diretamente. Para servir o arquivo use getSignedUrl(filePath).
     const url = isPublic ? `${this.cdnEndpoint}/${filePath}` : "";
 
     const result: UploadResult = {

@@ -22,6 +22,7 @@ messageRoutes.post('/message/forward', isAuth, MessageController.forwardMessage)
 
 messageRoutes.post("/messages/edit/:messageId", isAuth, MessageController.edit);
 messageRoutes.post("/messages/redownload/:messageId", isAuth, MessageController.redownloadMedia);
+messageRoutes.post("/messages/retry-media/:messageId", isAuth, MessageController.retryMediaDownload);
 
 messageRoutes.get("/message-search", isAuth, MessageController.searchMessages);
 

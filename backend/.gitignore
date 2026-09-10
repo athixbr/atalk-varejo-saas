@@ -8,6 +8,7 @@ dist
 .env
 .env.test
 .env.migration
+migracao-dados.md
 
 # Uploads / media (stored in S3/Spaces or local volume)
 public/*

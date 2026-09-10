@@ -15,6 +15,7 @@ import Ticket from "./Ticket";
 import Company from "./Company";
 import Queue from "./Queue";
 import TicketTraking from "./TicketTraking";
+import { extractKeyFromUrl, getSignedMediaUrl } from "../helpers/uploadToSpaces";
 
 @Table
 class Message extends Model<Message> {
@@ -50,24 +51,18 @@ class Message extends Model<Message> {
   get mediaUrl(): string | null {
     const raw = this.getDataValue("mediaUrl");
     if (!raw) return null;
-    // Arquivos novos: URL completa do DO Spaces CDN
+    // Arquivos novos: valor salvo é uma URL canônica do bucket (privado) — a key é
+    // extraída dela e uma URL assinada temporária é gerada a cada leitura.
     if (raw.startsWith("https://") || raw.startsWith("http://")) {
-      // NÃO usar new URL() — ele interpreta # como fragmento e trunca o path.
-      // Localiza o início do path (terceira barra) e encoda cada segmento via string.
-      const doubleSlash = raw.indexOf("//");
-      const pathStart = raw.indexOf("/", doubleSlash + 2);
-      if (pathStart === -1) return raw;
-      const origin = raw.substring(0, pathStart);
-      const rawPath = raw.substring(pathStart); // ex: /company2/file[#x].pdf
-      const encodedPath = rawPath
-        .split("/")
-        .map(seg => {
-          // Decodifica primeiro para evitar duplo encoding, depois re-encoda
-          try { seg = decodeURIComponent(seg); } catch (_) {}
-          return encodeURIComponent(seg);
-        })
-        .join("/");
-      return `${origin}${encodedPath}`;
+      const backendUrl = process.env.BACKEND_URL;
+      if (backendUrl && raw.startsWith(backendUrl)) {
+        // Upload para o bucket falhou no momento do envio e o arquivo foi salvo
+        // localmente como fallback (ver MessageController/wbotMessageListener) —
+        // já é servido direto por express.static, não existe no bucket para assinar.
+        return raw;
+      }
+      const key = extractKeyFromUrl(raw);
+      return getSignedMediaUrl(key);
     }
     // Arquivos antigos: monta URL do backend local (retrocompatível)
     return `${process.env.BACKEND_URL}${process.env.PROXY_PORT ? `:${process.env.PROXY_PORT}` : ""}/public/company${this.companyId}/${raw}`;

@@ -197,7 +197,8 @@ const TicketsListCustom = (props) => {
         statusFilter,
         userFilter,
         selectedForMerge,
-        onMergeSelect
+        onMergeSelect,
+        mergeMode
     } = props;
 
     const classes = useStyles();
@@ -383,6 +384,7 @@ const TicketsListCustom = (props) => {
                                     searchParam={searchParam}
                                     isSelectedForMerge={selectedForMerge?.some(t => t.id === ticket.id)}
                                     onMergeSelect={onMergeSelect}
+                                    mergeMode={mergeMode}
                                 // handleChangeTab={handleChangeTab}
                                 />
                             ))}

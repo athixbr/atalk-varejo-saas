@@ -82,6 +82,9 @@ const MergeTicketsService = async ({
     } as any);
   }
 
+  // Captura status original antes de alterar, para emitir socket na sala certa
+  const originalMergedStatus = mergedTicket.status;
+
   // Oculta o ticket incorporado
   await mergedTicket.update({
     isMerged: true,
@@ -113,7 +116,7 @@ const MergeTicketsService = async ({
   const io = getIO();
 
   // Remove o ticket incorporado da lista de todos os usuários
-  io.to(mergedTicket.status)
+  io.to(originalMergedStatus)
     .to(mergedTicketId.toString())
     .emit(`company-${companyId}-ticket`, {
       action: "delete",

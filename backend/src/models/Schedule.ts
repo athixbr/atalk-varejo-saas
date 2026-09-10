@@ -50,6 +50,12 @@ class Schedule extends Model<Schedule> {
   @Column(DataType.STRING)
   status: string;
 
+  @Column(DataType.TEXT)
+  mediaUrl: string;
+
+  @Column(DataType.STRING(50))
+  mediaType: string;
+
   @CreatedAt
   createdAt: Date;
 

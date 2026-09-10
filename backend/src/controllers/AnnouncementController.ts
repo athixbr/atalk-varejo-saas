@@ -12,6 +12,7 @@ import UpdateService from "../services/AnnouncementService/UpdateService";
 import DeleteService from "../services/AnnouncementService/DeleteService";
 import FindService from "../services/AnnouncementService/FindService";
 import FindAdminNotificationsService from "../services/AnnouncementService/FindAdminNotificationsService";
+import ListAdminNotificationsService from "../services/AnnouncementService/ListAdminNotificationsService";
 import DismissService from "../services/AnnouncementService/DismissService";
 import MarkReadService from "../services/AnnouncementService/MarkReadService";
 
@@ -26,13 +27,19 @@ type IndexQuery = {
 };
 
 type StoreData = {
-  priority: string;
+  priority?: string;
   title: string;
-  text: string;
-  status: string;
+  text?: string;
+  status?: string;
   companyId: number;
   mediaPath?: string;
   mediaName?: string;
+  tipo?: string;
+  usuariosIds?: number[];
+  departamentosIds?: number[];
+  expirationDays?: number;
+  expiresAt?: Date;
+  scheduledAt?: Date | null;
 };
 
 type FindParams = {
@@ -51,8 +58,16 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.user;
+  const { companyId, id: userId } = req.user;
   const data = req.body as StoreData;
+
+  // parse arrays enviados como JSON string (multipart form)
+  if (typeof data.usuariosIds === "string") {
+    try { data.usuariosIds = JSON.parse(data.usuariosIds as any); } catch { data.usuariosIds = []; }
+  }
+  if (typeof data.departamentosIds === "string") {
+    try { data.departamentosIds = JSON.parse(data.departamentosIds as any); } catch { data.departamentosIds = []; }
+  }
 
   const schema = Yup.object().shape({
     title: Yup.string().required()
@@ -64,10 +79,33 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError(err.message);
   }
 
+  if (data.expirationDays && Number(data.expirationDays) > 0) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + Number(data.expirationDays));
+    data.expiresAt = expiresAt;
+  }
+
+  // scheduledAt: se vier vazio/null, manter nulo
+  if (!data.scheduledAt) {
+    data.scheduledAt = null;
+  }
+
+  // Arquivo enviado junto ao POST
+  const files = req.files as Express.Multer.File[];
+  let mediaPath: string | undefined;
+  let mediaName: string | undefined;
+  if (files && files.length > 0) {
+    const file = files[0];
+    mediaPath = file.filename.replace("/", "-");
+    mediaName = file.originalname.replace("/", "-");
+  }
+
   const record = await CreateService({
     ...data,
-    companyId
-  });
+    companyId,
+    createdByUserId: Number(userId),
+    ...(mediaPath ? { mediaPath, mediaName } : {})
+  } as any);
 
   const io = getIO();
   io.emit(`company-announcement`, {
@@ -92,6 +130,14 @@ export const update = async (
 ): Promise<Response> => {
   const data = req.body as StoreData;
 
+  // parse arrays enviados como JSON string (multipart form)
+  if (typeof data.usuariosIds === "string") {
+    try { data.usuariosIds = JSON.parse(data.usuariosIds as any); } catch { data.usuariosIds = []; }
+  }
+  if (typeof data.departamentosIds === "string") {
+    try { data.departamentosIds = JSON.parse(data.departamentosIds as any); } catch { data.departamentosIds = []; }
+  }
+
   const schema = Yup.object().shape({
     title: Yup.string().required()
   });
@@ -102,12 +148,33 @@ export const update = async (
     throw new AppError(err.message);
   }
 
+  if (data.expirationDays && Number(data.expirationDays) > 0) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + Number(data.expirationDays));
+    data.expiresAt = expiresAt;
+  }
+
+  if (!data.scheduledAt) {
+    data.scheduledAt = null;
+  }
+
+  // Arquivo enviado junto ao PUT
+  const files = req.files as Express.Multer.File[];
+  let mediaPath: string | undefined;
+  let mediaName: string | undefined;
+  if (files && files.length > 0) {
+    const file = files[0];
+    mediaPath = file.filename.replace("/", "-");
+    mediaName = file.originalname.replace("/", "-");
+  }
+
   const { id } = req.params;
 
   const record = await UpdateService({
     ...data,
-    id
-  });
+    id,
+    ...(mediaPath ? { mediaPath, mediaName } : {})
+  } as any);
 
   const io = getIO();
   io.emit(`company-announcement`, {
@@ -123,10 +190,25 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
-  const { companyId } = req.user;
+
+  // Remover arquivo de mídia se existir
+  try {
+    const announcement = await Announcement.findByPk(id);
+    if (announcement) {
+      const rawPath = (announcement as any).getDataValue("mediaPath");
+      if (rawPath) {
+        const filePath = path.resolve("public", "announcements", rawPath);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao remover mídia da notificação:", err);
+  }
 
   await DeleteService(id);
- 
+
   const io = getIO();
   io.emit(`company-announcement`, {
     action: "delete",
@@ -158,8 +240,8 @@ export const mediaUpload = async (
     const announcement = await Announcement.findByPk(id);
 
     await announcement.update({
-      mediaPath: file.filename.replace('/','-'),
-      mediaName: file.originalname.replace('/','-')
+      mediaPath: file.filename.replace("/", "-"),
+      mediaName: file.originalname.replace("/", "-")
     });
     await announcement.reload();
 
@@ -169,7 +251,7 @@ export const mediaUpload = async (
       record: announcement
     });
 
-    return res.send({ mensagem: "Mensagem enviada" });
+    return res.send({ mensagem: "Arquivo enviado" });
   } catch (err: any) {
     throw new AppError(err.message);
   }
@@ -181,9 +263,25 @@ export const adminNotifications = async (
 ): Promise<Response> => {
   const { id: userId, companyId } = req.user;
 
-  const records = await FindAdminNotificationsService({ userId, companyId });
+  const records = await FindAdminNotificationsService({
+    userId: Number(userId),
+    companyId: Number(companyId)
+  });
 
   return res.status(200).json(records);
+};
+
+export const adminList = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const { records, count } = await ListAdminNotificationsService({
+    companyId: Number(companyId)
+  });
+
+  return res.status(200).json({ records, count });
 };
 
 export const dismiss = async (
@@ -193,7 +291,7 @@ export const dismiss = async (
   const { id: userId } = req.user;
   const announcementId = Number(req.params.id);
 
-  const record = await DismissService({ announcementId, userId });
+  const record = await DismissService({ announcementId, userId: Number(userId) });
 
   return res.status(200).json(record);
 };
@@ -205,7 +303,7 @@ export const markRead = async (
   const { id: userId } = req.user;
   const announcementId = Number(req.params.id);
 
-  const record = await MarkReadService({ announcementId, userId });
+  const record = await MarkReadService({ announcementId, userId: Number(userId) });
 
   return res.status(200).json(record);
 };
@@ -219,12 +317,12 @@ export const deleteMedia = async (
   try {
     const announcement = await Announcement.findByPk(id);
 
-    const filePath = path.resolve("public", "announcements",announcement.mediaPath);
-
-    const fileExists = fs.existsSync(filePath);
-
-    if (fileExists) {
-      fs.unlinkSync(filePath);
+    const rawPath = (announcement as any).getDataValue("mediaPath");
+    if (rawPath) {
+      const filePath = path.resolve("public", "announcements", rawPath);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
 
     await announcement.update({

@@ -217,6 +217,7 @@ const ListTicketsService = async ({
       where: {
         queueId: showAll === "true" || user.allTicket === "enable" ? { [Op.or]: [queueIds, null] } : queueIds,
         status: "closed",
+        isMerged: { [Op.or]: [false, null] },
       },
       group: ['companyId', 'contactId', 'whatsappId'],
     });
@@ -239,6 +240,7 @@ const ListTicketsService = async ({
       attributes: ['companyId', 'contactId', 'whatsappId', [literal('MAX("id")'), 'id']],
       where: {
         queueId: showAll === "true" || user.allTicket === "enable" ? { [Op.or]: [queueIds, null] } : queueIds,
+        isMerged: { [Op.or]: [false, null] },
       },
       group: ['companyId', 'contactId', 'whatsappId'],
     });
@@ -367,6 +369,14 @@ const ListTicketsService = async ({
       };
     }
 
+  }
+
+  // Filtro de usuário para status não-search (ex: "ver como usuário" na página de tickets)
+  if (status !== "search" && showAll === "true" && Array.isArray(users) && users.length > 0) {
+    whereCondition = {
+      ...whereCondition,
+      userId: { [Op.in]: users }
+    };
   }
 
   if (withUnreadMessages === "true") {

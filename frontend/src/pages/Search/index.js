@@ -332,8 +332,13 @@ export default function Search() {
     setMediaType(newValue);
   };
 
-  const handleOpenTicket = (ticketId) => {
-    history.push(`/tickets/${ticketId}`);
+  const handleOpenTicket = (ticketUUID, ticketId) => {
+    const target = ticketUUID || ticketId;
+    history.push(`/tickets/${target}`, {
+      from: "search",
+      searchTerm: searchParam,
+      searchPath: "/busca",
+    });
   };
 
   const handleOpenMedia = (url) => {
@@ -486,7 +491,7 @@ export default function Search() {
                         className={classes.ticketChip}
                         color="primary"
                         variant="outlined"
-                        onClick={() => handleOpenTicket(msg.ticketId)}
+                        onClick={() => handleOpenTicket(msg.ticketUUID, msg.ticketId)}
                       />
                       <Chip
                         label={statusInfo.label}
@@ -512,7 +517,7 @@ export default function Search() {
                     <IconButton
                       className={classes.openBtn}
                       size="small"
-                      onClick={() => handleOpenTicket(msg.ticketId)}
+                      onClick={() => handleOpenTicket(msg.ticketUUID, msg.ticketId)}
                     >
                       <OpenInNewIcon fontSize="small" />
                     </IconButton>

@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import React, { useContext, useEffect, useMemo, useState } from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 // import moment from "moment";
 import UserLanguageSelector from "../components/UserLanguageSelector";
 // import { isNill } from "lodash";
@@ -295,9 +295,13 @@ const SmallAvatar = withStyles((theme) => ({
   },
 }))(Avatar);
 
+const EMBEDDED_APP_ROUTES = ["/sped-fiscal", "/xml-nfe"];
+
 const LoggedInLayout = ({ children, themeToggle }) => {
   const classes = useStyles();
   const history = useHistory();
+  const location = useLocation();
+  const hideAppBar = EMBEDDED_APP_ROUTES.includes(location.pathname);
   const [userToken, setUserToken] = useState("disabled");
   const [loadingUserToken, setLoadingUserToken] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -529,6 +533,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
         {/* <Divider /> */}
       </Drawer>
 
+      {!hideAppBar && (
       <AppBar
         position="absolute"
         className={clsx(classes.appBar, drawerOpen && classes.appBarShift)}
@@ -708,8 +713,9 @@ const LoggedInLayout = ({ children, themeToggle }) => {
           </div>
         </Toolbar>
       </AppBar>
+      )}
       <main className={classes.content}>
-        <div className={classes.appBarSpacer} />
+        {!hideAppBar && <div className={classes.appBarSpacer} />}
         {showDialogButton && <InternalChat />}
 
         {children ? children : null}

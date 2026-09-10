@@ -52,7 +52,6 @@ import UserPerformanceReports from '../pages/Reports/UserPerformanceReports';
 import Tarefas from "../pages/Tarefas";
 import Agenda from "../pages/Agenda";
 import Controles from "../pages/Controles";
-import CRM from "../pages/CRM";
 import LeadDetail from "../pages/CRM/LeadDetail";
 import CrmTasks from "../pages/CrmTasks";
 import CrmTasksPipeline from "../pages/CrmTasksPipeline";
@@ -77,6 +76,7 @@ import ClientesCadastro from "../pages/Clientes/Cadastro";
 import Socios from "../pages/Socios";
 import SociosCadastro from "../pages/Socios/Cadastro";
 import XmlNfe from "../pages/XmlNfe";
+import SpedFiscal from "../pages/SpedFiscal";
 import PainelTarefas from "../pages/PainelTarefas";
 import Recorrencia from "../pages/Recorrencia";
 import Parcelamentos from "../pages/Parcelamentos";
@@ -141,6 +141,7 @@ const Routes = () => {
                 <Route exact path="/contacts" component={Contacts} isPrivate />
                 <Route exact path="/helps" component={Helps} isPrivate />
                 <Route exact path="/xml-nfe" component={XmlNfe} isPrivate />
+                <Route exact path="/sped-fiscal" component={SpedFiscal} isPrivate />
                 <Route exact path="/users" component={Users} isPrivate />
                 <Route exact path="/users/perfil-cargo/:userId" component={PerfilCargo} isPrivate />
                 <Route exact path="/users/holerites/:userId" component={Holerites} isPrivate />
@@ -167,7 +168,7 @@ const Routes = () => {
                 <Route exact path="/controles" component={Controles} isPrivate />
                 <Route exact path="/recorrencia" component={ListaTarefasRecorrentes} isPrivate />
                 <Route exact path="/parcelamentos" component={Parcelamentos} isPrivate />
-                <Route exact path="/crm" component={CRM} isPrivate />
+                <Route exact path="/crm" component={CrmTasksPipeline} isPrivate />
                 <Route exact path="/crm/leads/:leadId" component={LeadDetail} isPrivate />
                 <Route exact path="/crm/tarefas" component={CrmTasks} isPrivate />
                 <Route exact path="/crm/tarefas/pipeline" component={CrmTasksPipeline} isPrivate />

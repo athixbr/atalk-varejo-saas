@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import BullQueue from "bull";
+import path from "path";
 import { MessageData, SendMessage } from "./helpers/SendMessage";
 import Whatsapp from "./models/Whatsapp";
 import { logger } from "./utils/logger";
@@ -21,7 +22,6 @@ import GetWhatsappWbot from "./helpers/GetWhatsappWbot";
 import sequelize from "./database";
 import { getMessageOptions } from "./services/WbotServices/SendWhatsAppMedia";
 import { getIO } from "./libs/socket";
-import path from "path";
 import User from "./models/User";
 import Company from "./models/Company";
 import Contact from "./models/Contact";
@@ -155,10 +155,20 @@ async function handleSendScheduledMessage(job) {
   try {
     const whatsapp = await GetDefaultWhatsApp(schedule.companyId);
 
-    await SendMessage(whatsapp, {
+    const msgData: MessageData = {
       number: schedule.contact.number,
       body: schedule.body,
-    }, false);
+      companyId: schedule.companyId,
+    };
+
+    if (schedule.mediaUrl) {
+      const publicRoot = path.resolve(__dirname, "..", "..", "public");
+      // mediaUrl stored as /public/company{id}/schedules/filename
+      const relativePart = schedule.mediaUrl.replace(/^\/public\//, "");
+      msgData.mediaPath = path.join(publicRoot, relativePart);
+    }
+
+    await SendMessage(whatsapp, msgData, false);
 
     await scheduleRecord?.update({
       sentAt: moment().format("YYYY-MM-DD HH:mm"),
@@ -896,7 +906,11 @@ async function handleRandomUser() {
               //ticket.save();
 
               const ticketToSend = await ShowTicketService(ticket.id, ticket.companyId);
-              const msg = await SendWhatsAppMessage({ body: "*Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!", ticket: ticketToSend });
+              try {
+                await SendWhatsAppMessage({ body: "*Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!", ticket: ticketToSend });
+              } catch (sendErr) {
+                logger.warn(`Falha ao enviar msg assistente virtual ticket ${ticket.id}: ${sendErr.message}`);
+              }
 
               await UpdateTicketService({
               	ticketData: { status: "open", userId: randomUserId },
@@ -930,7 +944,11 @@ async function handleRandomUser() {
                   //ticket.save();
 
                   const ticketToSend = await ShowTicketService(ticket.id, ticket.companyId);
-                  const msg = await SendWhatsAppMessage({ body: "*Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!", ticket: ticketToSend });
+                  try {
+                    await SendWhatsAppMessage({ body: "*Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!", ticket: ticketToSend });
+                  } catch (sendErr) {
+                    logger.warn(`Falha ao enviar msg assistente virtual ticket ${ticket.id}: ${sendErr.message}`);
+                  }
 
                   await UpdateTicketService({
                     ticketData: { status: "open", userId: randomUserId },

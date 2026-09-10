@@ -24,7 +24,7 @@ import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import ButtonWithSpinner from "../ButtonWithSpinner";
 import MarkdownWrapper from "../MarkdownWrapper";
-import { Tooltip } from "@material-ui/core";
+import { Tooltip, Checkbox } from "@material-ui/core";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import toastError from "../../errors/toastError";
@@ -208,9 +208,34 @@ const useStyles = makeStyles((theme) => ({
         opacity: 0.9,
         marginTop: "1px",
     },
+    mergeSelected: {
+        border: "2px solid #1976d2 !important",
+        backgroundColor: "#e3f2fd !important",
+        "&:hover": {
+            backgroundColor: "#bbdefb !important",
+        },
+    },
+    mergeSelectable: {
+        borderLeft: "3px solid #bdbdbd",
+        cursor: "pointer !important",
+    },
+    mergeCheckboxOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        bottom: 0,
+        width: 44,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 5,
+        borderRadius: "10px 0 0 10px",
+        backgroundColor: "rgba(255,255,255,0.75)",
+        pointerEvents: "none",
+    },
 }));
 
-const TicketListItemCustom = ({ ticket, searchParam, isSelectedForMerge = false, onMergeSelect }) => {
+const TicketListItemCustom = ({ ticket, searchParam, isSelectedForMerge = false, onMergeSelect, mergeMode = false }) => {
     const classes = useStyles();
     const history = useHistory();
     const [loading, setLoading] = useState(false);
@@ -444,13 +469,32 @@ const TicketListItemCustom = ({ ticket, searchParam, isSelectedForMerge = false,
 
             <ListItem dense button
                 onClick={(e) => {
+                    if (mergeMode && onMergeSelect) {
+                        e.preventDefault();
+                        onMergeSelect(ticket);
+                        return;
+                    }
                     handleSelectTicket(ticket);
                 }}
                 selected={ticketId && ticketId === ticket.uuid}
                 className={clsx(classes.ticket, {
                     [classes.pendingTicket]: ticket.status === "pending",
+                    [classes.mergeSelected]: isSelectedForMerge,
+                    [classes.mergeSelectable]: mergeMode && !isSelectedForMerge,
                 })}
             >
+                {/* Overlay de checkbox no modo agrupamento */}
+                {mergeMode && (
+                    <div className={classes.mergeCheckboxOverlay}>
+                        <Checkbox
+                            checked={isSelectedForMerge}
+                            color="primary"
+                            size="small"
+                            style={{ padding: 2 }}
+                        />
+                    </div>
+                )}
+
                 {/* Badge de ticket em atendimento */}
                 {ticket.status === "open" && ticket.userId && (
                     <div className={ticket.userId === user.id ? classes.ticketInAttendanceByMe : classes.ticketInAttendance}>
@@ -743,17 +787,18 @@ const TicketListItemCustom = ({ ticket, searchParam, isSelectedForMerge = false,
                             </ButtonWithSpinner>
                         )}
                     </span>
-                    <span className={classes.secondaryContentSecond1} >
-                        {(ticket.status === "open" || ticket.status === "group") && onMergeSelect && (
+                    <span className={classes.secondaryContentSecond} >
+                        {!mergeMode && (ticket.status === "open" || ticket.status === "group") && onMergeSelect && (
                             <ButtonWithSpinner
                                 style={{
-                                    backgroundColor: isSelectedForMerge ? '#e3f2fd' : 'transparent',
+                                    backgroundColor: 'transparent',
                                     boxShadow: 'none', border: 'none',
-                                    color: isSelectedForMerge ? '#1976d2' : '#999',
+                                    color: '#bbb',
                                     padding: '0px', borderRadius: "50%",
                                     right: '51px', position: 'absolute',
-                                    fontSize: '0.6rem', bottom: '-30px',
-                                    minWidth: '2em', width: 'auto'
+                                    fontSize: '0.6rem', bottom: '4px',
+                                    minWidth: '2em', width: 'auto',
+                                    opacity: 0.7,
                                 }}
                                 variant="contained"
                                 className={classes.acceptButton}
@@ -761,7 +806,7 @@ const TicketListItemCustom = ({ ticket, searchParam, isSelectedForMerge = false,
                                 loading={false}
                                 onClick={e => { e.stopPropagation(); onMergeSelect(ticket); }}
                             >
-                                <Tooltip title="Agrupar ticket">
+                                <Tooltip title="Ativar modo agrupar e selecionar este ticket">
                                     <CallMerge fontSize="small" />
                                 </Tooltip>
                             </ButtonWithSpinner>

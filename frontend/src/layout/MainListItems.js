@@ -468,7 +468,14 @@ const MainListItems = (props, { collapsed }) => {
   
   const { list } = useHelps();
   const [hasHelps, setHasHelps] = useState(false);
-  
+
+  // Flags de visibilidade de menu - itens desativados temporariamente
+  // Para reativar, basta trocar para true
+  const SHOW_COBRANCA = false;
+  const SHOW_BASE_CONHECIMENTO = false;
+  const SHOW_CENTRAL_AJUDA = false;
+  const SHOW_XML_NFE = false;
+
   useEffect(() => {
     setIsAdmin(user.profile === "admin");
   }, [user]);
@@ -1130,13 +1137,6 @@ const MainListItems = (props, { collapsed }) => {
         <List component="div" disablePadding>
           <ListItemLink
             dense
-            to="/crm"
-            primary="Leads"
-            icon={<Kanban />}
-            tooltip={collapsed}
-          />
-          <ListItemLink
-            dense
             to="/crm/tarefas"
             primary="Tarefas CRM"
             icon={<TaskSquare />}
@@ -1146,7 +1146,7 @@ const MainListItems = (props, { collapsed }) => {
             dense
             to="/crm/tarefas/pipeline"
             primary="Pipeline"
-            icon={<TaskSquare />}
+            icon={<Kanban />}
             tooltip={collapsed}
           />
         </List>
@@ -1181,12 +1181,14 @@ const MainListItems = (props, { collapsed }) => {
         tooltip={collapsed}
       />
 
-      <ListItemLink
-        to="/cobranca"
-        primary="Cobrança"
-        icon={<MoneySend />}
-        tooltip={collapsed}
-      />
+      {SHOW_COBRANCA && (
+        <ListItemLink
+          to="/cobranca"
+          primary="Cobrança"
+          icon={<MoneySend />}
+          tooltip={collapsed}
+        />
+      )}
 
       <Divider />
 
@@ -1210,19 +1212,23 @@ const MainListItems = (props, { collapsed }) => {
         />
       )}
 
-      <ListItemLink
-        to="/base-conhecimento"
-        primary="Base de Conhecimento"
-        icon={<DocumentText />}
-        tooltip={collapsed}
-      />
+      {SHOW_BASE_CONHECIMENTO && (
+        <ListItemLink
+          to="/base-conhecimento"
+          primary="Base de Conhecimento"
+          icon={<DocumentText />}
+          tooltip={collapsed}
+        />
+      )}
 
-      <ListItemLink
-        to="/helps"
-        primary="Central de Ajuda"
-        icon={<CalendarEdit />}
-        tooltip={collapsed}
-      />
+      {SHOW_CENTRAL_AJUDA && (
+        <ListItemLink
+          to="/helps"
+          primary="Central de Ajuda"
+          icon={<CalendarEdit />}
+          tooltip={collapsed}
+        />
+      )}
 
       {/* ====================================== */}
       {/* SEÇÃO 5: FERRAMENTAS EXTERNAS (All users) */}
@@ -1232,35 +1238,35 @@ const MainListItems = (props, { collapsed }) => {
       </ListSubheader>
 
       {/* SUBMENU FERRAMENTAS EXTERNAS */}
-      <ListItem
-        dense
-        button
-        component={RouterLink}
-        to="/xml-nfe"
-      >
-        <ListItemIcon>
-          <Tooltip title={collapsed ? "XML NF-e" : ""} placement="right">
-            <Avatar className={classes.iconHoverActive}>
-              <Link21 />
-            </Avatar>
-          </Tooltip>
-        </ListItemIcon>
-        <ListItemText
-          primary={
-            <Typography className={classes.listItemText}>
-              XML NF-e
-            </Typography>
-          }
-        />
-      </ListItem>
+      {SHOW_XML_NFE && (
+        <ListItem
+          dense
+          button
+          component={RouterLink}
+          to="/xml-nfe"
+        >
+          <ListItemIcon>
+            <Tooltip title={collapsed ? "XML NF-e" : ""} placement="right">
+              <Avatar className={classes.iconHoverActive}>
+                <Link21 />
+              </Avatar>
+            </Tooltip>
+          </ListItemIcon>
+          <ListItemText
+            primary={
+              <Typography className={classes.listItemText}>
+                XML NF-e
+              </Typography>
+            }
+          />
+        </ListItem>
+      )}
 
       <ListItem
         dense
         button
-        component="a"
-        href="https://sped.contco.com.br"
-        target="_blank"
-        rel="noopener noreferrer"
+        component={RouterLink}
+        to="/sped-fiscal"
       >
         <ListItemIcon>
           <Tooltip title={collapsed ? "SPED" : ""} placement="right">
@@ -1281,10 +1287,8 @@ const MainListItems = (props, { collapsed }) => {
       <ListItem
         dense
         button
-        component="a"
-        href="https://xml.contco.com.br"
-        target="_blank"
-        rel="noopener noreferrer"
+        component={RouterLink}
+        to="/xml-nfe"
       >
         <ListItemIcon>
           <Tooltip title={collapsed ? "XML Cartório" : ""} placement="right">

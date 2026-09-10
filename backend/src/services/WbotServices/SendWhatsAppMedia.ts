@@ -1,4 +1,4 @@
-import { WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
+import { WAMessage, AnyMessageContent, isLidUser } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs, { unlink, unlinkSync } from "fs";
 import { exec } from "child_process";
@@ -14,6 +14,8 @@ import { getWbot } from "../../libs/wbot";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import formatBody from "../../helpers/Mustache";
 import { ensureLocalFile, isSpacesUrl, cdnUrlToKey } from "../../helpers/uploadToSpaces";
+import cacheLayer from "../../libs/cache";
+import { resolveLidJid } from "../../libs/lidCache";
 interface Request {
   media: Express.Multer.File;
   ticket: Ticket;
@@ -24,6 +26,44 @@ interface Request {
 }
 
 const publicFolder = path.resolve(__dirname, "..", "..", "..", "..", "public");
+
+async function clearStaleSignalCache(wbot: any, whatsappId: number, jid: string): Promise<void> {
+  const phoneNumber = jid.split("@")[0];
+
+  try {
+    const lidMapping = wbot?.signalRepository?.lidMapping;
+    if (lidMapping?.mappingCache) {
+      lidMapping.mappingCache.delete(`pn:${phoneNumber}`);
+      lidMapping.mappingCache.delete(`lid:${phoneNumber}`);
+    }
+  } catch (_) {}
+
+  try {
+    wbot?.userDevicesCache?.del?.(phoneNumber);
+  } catch (_) {}
+
+  await Promise.all([
+    cacheLayer.delFromPattern(`sessions:${whatsappId}:session-${phoneNumber}*`),
+    cacheLayer.delFromPattern(`sessions:${whatsappId}:device-list-${phoneNumber}*`),
+    cacheLayer.delFromPattern(`sessions:${whatsappId}:lid-mapping-${phoneNumber}*`),
+    cacheLayer.delFromPattern(`sessions:${whatsappId}:tctoken-${jid}*`),
+    cacheLayer.del(`devicesCache:${whatsappId}:${phoneNumber}`),
+  ]);
+
+  let freshDeviceJids: string[] = [];
+  try {
+    if (wbot?.getUSyncDevices) {
+      const freshDevices: any[] = await wbot.getUSyncDevices([jid], false, false);
+      freshDeviceJids = (freshDevices || []).map((device: any) => device.jid).filter(Boolean);
+    }
+  } catch (_) {}
+
+  try {
+    if (wbot?.signalRepository?.deleteSession) {
+      await wbot.signalRepository.deleteSession(freshDeviceJids.length ? freshDeviceJids : [jid]);
+    }
+  } catch (_) {}
+}
 
 const processAudio = async (audio: string, companyId: string): Promise<string> => {
   const outputAudio = path.join(os.tmpdir(), `atalk-audio-${new Date().getTime()}.mp3`);
@@ -236,7 +276,23 @@ const SendWhatsAppMedia = async ({
       number = `${contactNumber.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
     }
 
-    const sentMessage = await wbot.sendMessage(number, { ...options });
+    let sentMessage: WAMessage;
+    try {
+      sentMessage = await wbot.sendMessage(number, { ...options });
+    } catch (sendErr) {
+      if (sendErr?.data !== 406 && sendErr?.message !== "not-acceptable") {
+        throw sendErr;
+      }
+
+      console.warn(`[SendWhatsAppMedia] 406 not-acceptable para ${number}; limpando cache Signal/LID e tentando novamente`);
+      await clearStaleSignalCache(wbot, ticket.whatsappId, number);
+      const retryNumber = isLidUser(number)
+        ? (await resolveLidJid(number)) || number
+        : number;
+      sentMessage = await wbot.sendMessage(retryNumber, { ...options });
+      console.warn(`[SendWhatsAppMedia] retry apos 406 concluido para ${retryNumber}`);
+    }
+
     await ticket.update({ lastMessage: bodyTicket || media.originalname, imported: null });
 
     // Salva imediatamente no banco e emite socket para o frontend mostrar a mensagem
